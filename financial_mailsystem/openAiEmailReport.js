@@ -107,7 +107,7 @@ function extractOpenAiOutputText_(data) {
 }
 
 function sanitizeEmailHtmlOutput_(html) {
-  return String(html || "")
+  return trimOpenAiEmailHtml_(String(html || "")
     .replace(/^```html\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/```\s*$/i, "")
@@ -115,6 +115,67 @@ function sanitizeEmailHtmlOutput_(html) {
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/\son\w+="[^"]*"/gi, "")
     .replace(/\son\w+='[^']*'/gi, "")
-    .replace(/javascript:/gi, "")
-    .trim();
+    .replace(/javascript:/gi, ""));
+}
+
+function trimOpenAiEmailHtml_(value) {
+  let html = String(value || "").trim();
+  if (!html) return "";
+
+  html = trimBeforeFirstEmailHtmlTag_(html);
+  html = trimAfterLastEmailHtmlTag_(html);
+
+  return html.trim();
+}
+
+function trimBeforeFirstEmailHtmlTag_(html) {
+  const match = html.match(/<(h[1-6]|p|div|section|article|ul|ol|blockquote)\b/i);
+  if (!match || match.index === undefined) return html;
+  return html.slice(match.index);
+}
+
+function trimAfterLastEmailHtmlTag_(html) {
+  const closingTagPattern = /<\/(h[1-6]|p|div|section|article|ul|ol|li|blockquote|strong|em|a)>/gi;
+  let match;
+  let lastEndIndex = -1;
+
+  while ((match = closingTagPattern.exec(html)) !== null) {
+    lastEndIndex = match.index + match[0].length;
+  }
+
+  if (lastEndIndex === -1) return html;
+  return html.slice(0, lastEndIndex);
+}
+
+function cleanExistingOpenAiEmailHtml() {
+  const ss = SpreadsheetApp.openById(DAILY_REPORT_TRANSFER_CONFIG.TARGET_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(DAILY_REPORT_TRANSFER_CONFIG.TARGET_SHEET_NAME);
+  if (!sheet) throw new Error("Target sheet not found: " + DAILY_REPORT_TRANSFER_CONFIG.TARGET_SHEET_NAME);
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return { cleaned: false, reason: "No report rows." };
+
+  const headers = values[0].map(header => String(header).trim());
+  const idx = indexMap_(headers);
+  const dateHeader = DAILY_REPORT_TRANSFER_CONFIG.TARGET_HEADERS[0];
+  const reportHeader = DAILY_REPORT_TRANSFER_CONFIG.TARGET_HEADERS[2];
+
+  if (idx[dateHeader] === undefined) throw new Error("Target sheet missing header: " + dateHeader);
+  if (idx[reportHeader] === undefined) throw new Error("Target sheet missing header: " + reportHeader);
+
+  const todayText = Utilities.formatDate(new Date(), CONFIG.TZ, "yyyy/MM/dd");
+  const rowNumber = findTargetReportRowByDate_(values.slice(1), idx, todayText);
+  if (!rowNumber) return { cleaned: false, reason: "No target row for today: " + todayText };
+
+  const cell = sheet.getRange(rowNumber, idx[reportHeader] + 1);
+  const originalHtml = String(cell.getValue() || "");
+  const cleanedHtml = sanitizeEmailHtmlOutput_(originalHtml);
+  cell.setValue(cleanedHtml);
+
+  return {
+    cleaned: true,
+    rowNumber,
+    originalLength: originalHtml.length,
+    cleanedLength: cleanedHtml.length,
+  };
 }
