@@ -1,5 +1,5 @@
 const CONFIG = {
-  SPREADSHEET_ID: "15R-qY3U8S0JQarZWCPwj3l8mF22ZMRY30Gg6kp6Kfg4",
+  SPREADSHEET_ID: "1hqtYYrLw-4oAS0exkqv0Ka0Usfq4bHJh5Gs2AHtj114",
   TZ: "Asia/Taipei",
   FORM_RESPONSE_SHEET: "Form Responses 1",
   REPORT_SHEET: "今日財報",
