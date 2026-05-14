@@ -338,12 +338,29 @@ function buildAudienceFinanceReportHtml_(report, vars, recipient, audienceType) 
       <div style="font-size:14px;color:#8c7f78;margin-bottom:8px;">${escapeHtml_(brandName)}</div>
       <h1 style="font-size:26px;line-height:1.35;margin:0 0 12px;color:#2d2724;">${escapeHtml_(reportTitle)}</h1>
       <div style="font-size:14px;color:#8c7f78;margin-bottom:24px;">${escapeHtml_(reportDate)}</div>
+      ${recipient.isWelcome ? buildWelcomeSubscriberBlock_(audienceType) : ""}
       <div style="font-size:16px;line-height:1.95;color:#332d29;">${reportBody}</div>
       ${buildHealthYogaBlock_(officialSiteUrl)}
       ${audienceType === "paid"
         ? buildPaidSubscriberBlock_(vars, recipient, officialSiteUrl)
         : buildFreeSubscriberBlock_(vars, officialSiteUrl)}
     </div>
+  </div>
+</div>
+`;
+}
+
+function buildWelcomeSubscriberBlock_(audienceType) {
+  const title = audienceType === "paid"
+    ? "\u6b61\u8fce\u52a0\u5165\u4ed8\u8cbb\u8a02\u95b1"
+    : "\u6b61\u8fce\u52a0\u5165\u514d\u8cbb\u8a02\u95b1";
+
+  return `
+<div style="margin:0 0 26px;padding:22px;background:#fbfaf9;border-left:4px solid #8f7b6c;border-radius:12px;">
+  <div style="font-size:20px;font-weight:700;line-height:1.5;margin-bottom:10px;color:#2d2724;">${title}</div>
+  <div style="font-size:15px;line-height:1.8;color:#4b403b;">
+    \u5f88\u958b\u5fc3\u4f60\u4f86\u5230\u9019\u88e1\u3002<br>
+    \u9019\u5c01\u4fe1\u5148\u628a\u6700\u65b0\u7684\u8ca1\u7d93\u5831\u544a\u9001\u7d66\u4f60\uff0c\u672a\u4f86\u6211\u6703\u6301\u7e8c\u7528\u6e05\u695a\u3001\u7a69\u5b9a\u3001\u597d\u5438\u6536\u7684\u65b9\u5f0f\uff0c\u966a\u4f60\u770b\u61c2\u5e02\u5834\u4e0a\u7684\u91cd\u8981\u8b8a\u5316\u3002
   </div>
 </div>
 `;
