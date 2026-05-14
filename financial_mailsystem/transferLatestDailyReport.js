@@ -18,16 +18,21 @@ const DAILY_REPORT_TRANSFER_CONFIG = {
 function transferLatestDailyReportAndTrashSource() {
   const today = new Date();
   const latestReport = findLatestDailyAiReport_(today);
+  const emailHtml = buildEmailHtmlFromAiReport_(latestReport.aiReport, latestReport.dayText);
+  let deleteResult;
 
-  writeDailyAiReportToTarget_(latestReport, today);
-  trashSourceDailyReportSpreadsheet_();
+  writeDailyAiReportToTarget_(latestReport, today, emailHtml);
+  deleteResult = tryDeleteSourceDailyReportRow_(latestReport.rowIndex);
 
   return {
     sourceSpreadsheetId: DAILY_REPORT_TRANSFER_CONFIG.SOURCE_SPREADSHEET_ID,
     targetSpreadsheetId: DAILY_REPORT_TRANSFER_CONFIG.TARGET_SPREADSHEET_ID,
     day: latestReport.dayText,
     createdAt: latestReport.createdAtText,
-    trashedSource: true,
+    htmlGenerated: true,
+    deletedSourceRow: deleteResult.deleted,
+    deletedSourceRowNumber: deleteResult.rowIndex,
+    deleteSourceRowError: deleteResult.error,
   };
 }
 
@@ -81,7 +86,7 @@ function findLatestDailyAiReport_(today) {
   return candidates[0];
 }
 
-function writeDailyAiReportToTarget_(latestReport, today) {
+function writeDailyAiReportToTarget_(latestReport, today, emailHtml) {
   const config = DAILY_REPORT_TRANSFER_CONFIG;
   const targetSs = SpreadsheetApp.openById(config.TARGET_SPREADSHEET_ID);
   const targetSheet = getOrCreateSheet_(targetSs, config.TARGET_SHEET_NAME);
@@ -97,7 +102,7 @@ function writeDailyAiReportToTarget_(latestReport, today) {
   const rowValues = [
     dateText,
     title,
-    latestReport.aiReport,
+    emailHtml,
     config.TARGET_STATUS_DRAFT,
   ];
 
@@ -141,6 +146,28 @@ function findTargetReportRowByDate_(rows, idx, dateText) {
   return null;
 }
 
-function trashSourceDailyReportSpreadsheet_() {
-  DriveApp.getFileById(DAILY_REPORT_TRANSFER_CONFIG.SOURCE_SPREADSHEET_ID).setTrashed(true);
+function deleteSourceDailyReportRow_(rowIndex) {
+  const config = DAILY_REPORT_TRANSFER_CONFIG;
+  const sourceSs = SpreadsheetApp.openById(config.SOURCE_SPREADSHEET_ID);
+  const sourceSheet = sourceSs.getSheetByName(config.SOURCE_SHEET_NAME);
+  if (!sourceSheet) throw new Error("Source sheet not found: " + config.SOURCE_SHEET_NAME);
+  sourceSheet.deleteRow(rowIndex);
+}
+
+function tryDeleteSourceDailyReportRow_(rowIndex) {
+  try {
+    deleteSourceDailyReportRow_(rowIndex);
+    return {
+      deleted: true,
+      rowIndex,
+      error: "",
+    };
+  } catch (error) {
+    Logger.log("Source report was transferred but row was not deleted: " + error.message);
+    return {
+      deleted: false,
+      rowIndex,
+      error: error.message,
+    };
+  }
 }
