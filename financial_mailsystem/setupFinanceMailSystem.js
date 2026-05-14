@@ -29,7 +29,8 @@ function setupFinanceMailSystem() {
     varSheet.appendRow(["reply_to_email", "exhalaok@gmail.com", "\u56de\u4fe1\u4fe1\u7bb1"]);
     varSheet.appendRow(["replay_form_url", "https://forms.gle/koNZzvJAb8wo6Eyv9", "\u5e73\u5e38\u63a8\u5ee3"]);
     varSheet.appendRow(["subscription_form_url", "https://forms.gle/4xvknzqcvnKVBMCj6", "\u5230\u671f\u524d\u4e09\u5929\u7e8c\u8a02"]);
-    varSheet.appendRow(["official_site_url", SUBSCRIBER_MAIL_CONFIG.OFFICIAL_SITE_URL, "\u5b98\u65b9\u8ab2\u7a0b\u7db2\u7ad9"]);
+    varSheet.appendRow(["yoga_course_form_url", SUBSCRIBER_MAIL_CONFIG.YOGA_COURSE_FORM_URL, "\u7dda\u4e0a\u745c\u73c8\u8ab2\u7a0b\u5831\u540d\u8868"]);
+    varSheet.appendRow(["official_site_url", SUBSCRIBER_MAIL_CONFIG.OFFICIAL_SITE_URL, "\u5b98\u65b9\u7db2\u7ad9"]);
     varSheet.appendRow(["free_unsubscribe_form_url", "", "\u514d\u8cbb\u8a02\u95b1\u8abf\u6574\u6216\u53d6\u6d88\u8868\u55ae"]);
     varSheet.appendRow(["monthly_days", "30", "\u6708\u65b9\u6848\u5929\u6578"]);
     varSheet.appendRow(["yearly_days", "365", "\u5e74\u65b9\u6848\u5929\u6578"]);

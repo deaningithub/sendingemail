@@ -13,6 +13,7 @@ const SUBSCRIBER_MAIL_CONFIG = {
   PAID_EMAIL_HEADER: "\u96fb\u5b50\u90f5\u4ef6\u5730\u5740",
   PAID_NAME_HEADER: "LINE \u540d\u7a31\u6216\u65b9\u4fbf\u806f\u7d61\u7684\u540d\u7a31",
   PAID_PLAN_HEADER: "\u8acb\u9078\u64c7\u8a02\u95b1\u65b9\u6848",
+  YOGA_COURSE_FORM_URL: "https://docs.google.com/forms/d/e/1FAIpQLSdePej5uncVdAt94k7fFbGhO688SGFvhXZsb1wb4H3Io2PS1Q/viewform",
   OFFICIAL_SITE_URL: "https://sites.google.com/view/taichiyo/%E6%89%80%E6%9C%89%E8%AA%B2%E7%A8%8B",
   EXPIRING_SOON_DAYS: 3,
   MAX_RECIPIENTS_PER_EMAIL: 50,
@@ -330,6 +331,7 @@ function buildAudienceFinanceReportHtml_(report, vars, recipient, audienceType) 
   const reportBody = formatReportBody_(report["\u4eca\u65e5\u5831\u544a"] || "");
   const reportDate = formatReportDate_(report["\u5bc4\u9001\u65e5\u671f"]);
   const officialSiteUrl = vars.official_site_url || SUBSCRIBER_MAIL_CONFIG.OFFICIAL_SITE_URL;
+  const yogaCourseFormUrl = vars.yoga_course_form_url || SUBSCRIBER_MAIL_CONFIG.YOGA_COURSE_FORM_URL;
 
   return `
 <div style="margin:0;padding:0;background:#f7f4f2;font-family:Arial,'Noto Sans TC',sans-serif;color:#222;">
@@ -340,7 +342,7 @@ function buildAudienceFinanceReportHtml_(report, vars, recipient, audienceType) 
       <div style="font-size:14px;color:#8c7f78;margin-bottom:24px;">${escapeHtml_(reportDate)}</div>
       ${recipient.isWelcome ? buildWelcomeSubscriberBlock_(audienceType) : ""}
       <div style="font-size:16px;line-height:1.95;color:#332d29;">${reportBody}</div>
-      ${buildHealthYogaBlock_(officialSiteUrl)}
+      ${buildHealthYogaBlock_(yogaCourseFormUrl, officialSiteUrl)}
       ${audienceType === "paid"
         ? buildPaidSubscriberBlock_(vars, recipient, officialSiteUrl)
         : buildFreeSubscriberBlock_(vars, officialSiteUrl)}
@@ -366,7 +368,7 @@ function buildWelcomeSubscriberBlock_(audienceType) {
 `;
 }
 
-function buildHealthYogaBlock_(officialSiteUrl) {
+function buildHealthYogaBlock_(yogaCourseFormUrl, officialSiteUrl) {
   return `
 <div style="margin:30px 0;padding:22px;background:#f3eeee;border-radius:16px;">
   <div style="font-size:13px;color:#8c7f78;margin-bottom:8px;">Dean's Online Yoga</div>
@@ -375,7 +377,10 @@ function buildHealthYogaBlock_(officialSiteUrl) {
     \u8ca1\u52d9\u6c7a\u7b56\u9700\u8981\u6e05\u695a\u7684\u982d\u8166\uff0c\u800c\u6e05\u695a\u7684\u982d\u8166\u4f86\u81ea\u7a69\u5b9a\u7684\u8eab\u9ad4\u548c\u547c\u5438\u3002<br>
     \u9080\u8acb\u4f60\u4eca\u5929\u5c31\u958b\u555f Dean \u7684\u7dda\u4e0a\u745c\u73c8\u8ab2\u7a0b\uff0c\u628a\u7167\u9867\u81ea\u5df1\u653e\u56de\u6700\u91cd\u8981\u7684\u4f4d\u7f6e\u3002
   </div>
-  <a href="${escapeHtml_(officialSiteUrl)}" style="display:inline-block;margin-top:14px;padding:12px 18px;background:#2d2724;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:700;">\u7acb\u5373\u958b\u555f\u7dda\u4e0a\u745c\u73c8\u8ab2\u7a0b</a>
+  <a href="${escapeHtml_(yogaCourseFormUrl)}" style="display:inline-block;margin-top:14px;padding:12px 18px;background:#2d2724;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:700;">\u7acb\u5373\u5831\u540d\u7dda\u4e0a\u745c\u73c8\u8ab2\u7a0b</a>
+  <div style="margin-top:12px;font-size:13px;line-height:1.7;color:#8c7f78;">
+    <a href="${escapeHtml_(officialSiteUrl)}" style="color:#8c7f78;">\u67e5\u770b Dean \u5b98\u65b9\u7db2\u7ad9\u8207\u6240\u6709\u8ab2\u7a0b</a>
+  </div>
 </div>
 `;
 }
