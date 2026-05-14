@@ -15,6 +15,7 @@ const SUBSCRIBER_MAIL_CONFIG = {
   PAID_PLAN_HEADER: "\u8acb\u9078\u64c7\u8a02\u95b1\u65b9\u6848",
   OFFICIAL_SITE_URL: "https://sites.google.com/view/taichiyo/%E6%89%80%E6%9C%89%E8%AA%B2%E7%A8%8B",
   EXPIRING_SOON_DAYS: 3,
+  MAX_RECIPIENTS_PER_EMAIL: 50,
 };
 
 function sendDailyPaidFinanceReport() {
@@ -42,14 +43,99 @@ function sendDailyFinanceReportByAudience_(audienceType) {
     : getActiveFreeSubscribersForMail_(ss, today);
   const sentMap = getSentMap_(ss, today);
   const mailType = audienceType === "paid" ? "daily_report_paid" : "daily_report_free";
-
-  recipients.forEach(recipient => {
+  const pendingRecipients = recipients.filter(recipient => {
     const logKey = buildLogKey_(today, recipient.email, mailType);
     if (sentMap[logKey]) {
       Logger.log("Already sent " + mailType + " to " + recipient.email);
-      return;
+      return false;
     }
+    return true;
+  });
 
+  groupRecipientsForAudienceBatch_(pendingRecipients, audienceType)
+    .forEach(group => {
+      chunkRecipients_(group.recipients, SUBSCRIBER_MAIL_CONFIG.MAX_RECIPIENTS_PER_EMAIL)
+        .forEach((batch, batchIndex) => {
+          sendAudienceBatch_(ss, today, report, vars, batch, audienceType, mailType, group.name + "-" + (batchIndex + 1));
+        });
+    });
+}
+
+function sendAudienceBatch_(ss, today, report, vars, recipients, audienceType, mailType, batchNumber) {
+  if (recipients.length === 0) return;
+
+  const emails = recipients.map(recipient => recipient.email);
+  const toEmail = vars.reply_to_email || Session.getActiveUser().getEmail();
+
+  try {
+    MailApp.sendEmail({
+      to: toEmail,
+      bcc: emails.join(","),
+      subject: buildBatchAudienceSubject_(report, recipients, audienceType),
+      htmlBody: buildBatchAudienceFinanceReportHtml_(report, vars, recipients, audienceType),
+      name: vars.sender_name || vars.brand_name || "Dean",
+      replyTo: vars.reply_to_email || undefined,
+    });
+
+    recipients.forEach(recipient => {
+      appendLog_(ss, today, recipient, mailType, "success", "sent batch " + batchNumber);
+    });
+  } catch (error) {
+    recipients.forEach(recipient => {
+      appendLog_(ss, today, recipient, mailType, "error", error.message);
+    });
+  }
+}
+
+function chunkRecipients_(recipients, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < recipients.length; i += chunkSize) {
+    chunks.push(recipients.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+function groupRecipientsForAudienceBatch_(recipients, audienceType) {
+  if (audienceType !== "paid") {
+    return [{ name: "free", recipients }];
+  }
+
+  return [
+    {
+      name: "paid-active",
+      recipients: recipients.filter(recipient => !recipient.isExpiringSoon),
+    },
+    {
+      name: "paid-renewal",
+      recipients: recipients.filter(recipient => recipient.isExpiringSoon),
+    },
+  ].filter(group => group.recipients.length > 0);
+}
+
+function buildBatchAudienceSubject_(report, recipients, audienceType) {
+  const base = report["\u4fe1\u4ef6\u6a19\u984c"] || "\u6bcf\u65e5\u76e4\u4e2d\u8ca1\u7d93\u6642\u4e8b\u5831\u544a";
+  if (audienceType === "paid" && recipients.some(recipient => recipient.isExpiringSoon)) {
+    return "\u7e8c\u8a02\u63d0\u9192 | " + base;
+  }
+  return base;
+}
+
+function buildBatchAudienceFinanceReportHtml_(report, vars, recipients, audienceType) {
+  const batchContext = {
+    email: "",
+    lineName: "",
+    plan: audienceType === "paid" ? "\u4ed8\u8cbb\u8a02\u95b1" : "\u514d\u8cbb\u8a02\u95b1",
+    expireDate: new Date(),
+    daysLeft: 0,
+    isExpiringSoon: audienceType === "paid" && recipients.some(recipient => recipient.isExpiringSoon),
+    audienceType,
+    isBatch: true,
+  };
+
+  return buildAudienceFinanceReportHtml_(report, vars, batchContext, audienceType);
+}
+
+function sendSingleAudienceMailForTesting_(ss, today, report, vars, recipient, audienceType, mailType) {
     try {
       MailApp.sendEmail({
         to: recipient.email,
@@ -63,7 +149,6 @@ function sendDailyFinanceReportByAudience_(audienceType) {
     } catch (error) {
       appendLog_(ss, today, recipient, mailType, "error", error.message);
     }
-  });
 }
 
 function prepareTodayMailReport_(ss, today, vars) {
@@ -279,6 +364,19 @@ function buildHealthYogaBlock_(officialSiteUrl) {
 }
 
 function buildPaidSubscriberBlock_(vars, recipient, officialSiteUrl) {
+  if (recipient.isBatch && recipient.isExpiringSoon) {
+    return buildPaidRenewalBlock_(vars.subscription_form_url || officialSiteUrl, recipient);
+  }
+
+  if (recipient.isBatch) {
+    return `
+<div style="margin-top:28px;padding-top:18px;border-top:1px solid #e6ded9;font-size:13px;line-height:1.7;color:#8c7f78;">
+  <div>\u4f60\u76ee\u524d\u662f\u4ed8\u8cbb\u8a02\u95b1\u8005\uff0c\u4ed8\u8cbb\u671f\u9593\u5c07\u6301\u7e8c\u6536\u5230\u6bcf\u65e5\u8ca1\u7d93\u6574\u7406\u3002</div>
+  <div>\u4ed8\u8cbb\u8a02\u95b1\u5230\u671f\u5f8c\u5c07\u81ea\u52d5\u505c\u6b62\u5bc4\u9001\uff1b\u82e5\u63a5\u8fd1\u5230\u671f\uff0c\u7cfb\u7d71\u6703\u53e6\u884c\u63d0\u9192\u7e8c\u8a02\u3002</div>
+</div>
+`;
+  }
+
   if (recipient.isExpiringSoon) {
     return buildPaidRenewalBlock_(vars.subscription_form_url || officialSiteUrl, recipient);
   }
@@ -293,10 +391,14 @@ function buildPaidSubscriberBlock_(vars, recipient, officialSiteUrl) {
 }
 
 function buildPaidRenewalBlock_(subscriptionFormUrl, recipient) {
+  const renewalTitle = recipient.isBatch
+    ? "\u4ed8\u8cbb\u8a02\u95b1\u5373\u5c07\u5230\u671f\u63d0\u9192"
+    : "\u4f60\u7684\u8a02\u95b1\u5269\u4e0b " + escapeHtml_(String(recipient.daysLeft)) + " \u5929";
+
   return `
 <div style="margin:30px 0;padding:22px;background:#fff3ef;border:1px solid #e8c8bd;border-radius:16px;">
   <div style="font-size:13px;color:#a86f62;margin-bottom:8px;">\u7e8c\u8a02\u63d0\u9192</div>
-  <div style="font-size:20px;font-weight:700;line-height:1.5;margin-bottom:10px;color:#5a2c24;">\u4f60\u7684\u8a02\u95b1\u5269\u4e0b ${escapeHtml_(String(recipient.daysLeft))} \u5929</div>
+  <div style="font-size:20px;font-weight:700;line-height:1.5;margin-bottom:10px;color:#5a2c24;">${renewalTitle}</div>
   <div style="font-size:15px;line-height:1.8;color:#4b403b;">
     \u4ed8\u8cbb\u8a02\u95b1\u5230\u671f\u5f8c\u5c07\u81ea\u52d5\u505c\u6b62\u5bc4\u9001\u3002<br>
     \u82e5\u4f60\u5e0c\u671b\u6301\u7e8c\u6536\u5230\u6bcf\u65e5\u8ca1\u7d93\u6574\u7406\uff0c\u53ef\u4ee5\u5148\u5b8c\u6210\u7e8c\u8a02\uff0c\u8b93\u9019\u4efd\u966a\u4f34\u4e0d\u4e2d\u65b7\u3002
