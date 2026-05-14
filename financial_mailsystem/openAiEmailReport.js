@@ -3,6 +3,8 @@ const OPENAI_EMAIL_REPORT_CONFIG = {
   MODEL_PROPERTY: "OPENAI_MODEL",
   DEFAULT_MODEL: "gpt-4.1",
   RESPONSES_URL: "https://api.openai.com/v1/responses",
+  REQUIRED_TITLE_HTML: "<h2>\u4eca\u65e5\u53ca\u6642\u5e02\u5834\u5831\u544a</h2>",
+  REQUIRED_CLOSING_HTML: "<p>\u6211\u662fDean\u958b\u767c\u7684AI\u5168\u7403\u8da8\u52e2\u8ffd\u7e31\u7cfb\u7d71\uff0c\u5e0c\u671b\u80fd\u5920\u5275\u9020\u4f60\u7684\u8ca1\u5bcc\u81ea\u7531\uff0c\u9080\u8acb\u4f60\u95dc\u6ce8\u4e26\u652f\u6301Dean\u7684\u5922\u60f3\u3002</p>",
 };
 
 function buildEmailHtmlFromAiReport_(aiReport, reportDateText) {
@@ -124,14 +126,16 @@ function trimOpenAiEmailHtml_(value) {
   let html = String(value || "").trim();
   if (!html) return "";
 
-  html = trimBeforeFirstEmailHtmlTag_(html);
+  html = trimBeforeFirstHeadingTag_(html);
   html = trimAfterLastEmailHtmlTag_(html);
+  html = enforceRequiredEmailReportTitle_(html);
+  html = enforceRequiredEmailReportClosing_(html);
 
   return html.trim();
 }
 
-function trimBeforeFirstEmailHtmlTag_(html) {
-  const match = html.match(/<(h[1-6]|p|div|section|article|ul|ol|blockquote)\b/i);
+function trimBeforeFirstHeadingTag_(html) {
+  const match = html.match(/<h[1-6]\b/i);
   if (!match || match.index === undefined) return html;
   return html.slice(match.index);
 }
@@ -147,6 +151,34 @@ function trimAfterLastEmailHtmlTag_(html) {
 
   if (lastEndIndex === -1) return html;
   return html.slice(0, lastEndIndex);
+}
+
+function enforceRequiredEmailReportTitle_(html) {
+  const firstHeadingPattern = /^\s*<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/i;
+  if (firstHeadingPattern.test(html)) {
+    return html.replace(firstHeadingPattern, OPENAI_EMAIL_REPORT_CONFIG.REQUIRED_TITLE_HTML);
+  }
+
+  return OPENAI_EMAIL_REPORT_CONFIG.REQUIRED_TITLE_HTML + "\n\n" + html;
+}
+
+function enforceRequiredEmailReportClosing_(html) {
+  const requiredClosing = OPENAI_EMAIL_REPORT_CONFIG.REQUIRED_CLOSING_HTML;
+  const closingText = "\u6211\u662fDean\u958b\u767c\u7684AI\u5168\u7403\u8da8\u52e2\u8ffd\u7e31\u7cfb\u7d71";
+  const closingIndex = html.indexOf(closingText);
+
+  if (closingIndex >= 0) {
+    const beforeClosing = html.slice(0, closingIndex);
+    const paragraphStart = beforeClosing.lastIndexOf("<p");
+
+    if (paragraphStart >= 0) {
+      return html.slice(0, paragraphStart).trim() + "\n\n" + requiredClosing;
+    }
+
+    return html.slice(0, closingIndex).trim() + "\n\n" + requiredClosing;
+  }
+
+  return html.trim() + "\n\n" + requiredClosing;
 }
 
 function cleanExistingOpenAiEmailHtml() {
