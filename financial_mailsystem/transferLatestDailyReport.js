@@ -94,22 +94,14 @@ function writeDailyAiReportToTarget_(latestReport, today, emailHtml) {
   ensureDailyReportTargetHeaders_(targetSheet);
 
   const values = targetSheet.getDataRange().getValues();
-  const headers = values[0].map(header => String(header).trim());
-  const idx = indexMap_(headers);
   const dateText = Utilities.formatDate(today, CONFIG.TZ, "yyyy/MM/dd");
   const title = buildAutoReportSubject_(today, getVariables_(targetSs));
-  const existingRow = findTargetReportRowByDate_(values.slice(1), idx, dateText);
   const rowValues = [
     dateText,
     title,
     emailHtml,
     config.TARGET_STATUS_DRAFT,
   ];
-
-  if (existingRow) {
-    targetSheet.getRange(existingRow, 1, 1, rowValues.length).setValues([rowValues]);
-    return;
-  }
 
   targetSheet.appendRow(rowValues);
 }
