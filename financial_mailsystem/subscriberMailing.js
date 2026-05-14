@@ -20,14 +20,26 @@ const SUBSCRIBER_MAIL_CONFIG = {
 };
 
 function sendDailyPaidFinanceReport() {
-  sendDailyFinanceReportByAudience_("paid");
+  sendDailyPaidMorningReport();
+}
+
+function sendDailyPaidMorningReport() {
+  sendDailyFinanceReportByAudience_("paid", "morning");
+}
+
+function sendDailyPaidMiddayReport() {
+  sendDailyFinanceReportByAudience_("paid", "midday");
+}
+
+function sendDailyPaidEveningReport() {
+  sendDailyFinanceReportByAudience_("paid", "evening");
 }
 
 function sendDailyFreeFinanceReport() {
   sendDailyFinanceReportByAudience_("free");
 }
 
-function sendDailyFinanceReportByAudience_(audienceType) {
+function sendDailyFinanceReportByAudience_(audienceType, paidSlot) {
   const today = new Date();
   if (isWeekend_(today)) {
     Logger.log("Weekend; skip daily finance report.");
@@ -43,7 +55,7 @@ function sendDailyFinanceReportByAudience_(audienceType) {
     ? getActivePaidSubscribersForMail_(ss, vars, today)
     : getActiveFreeSubscribersForMail_(ss, today);
   const sentMap = getSentMap_(ss, today);
-  const mailType = audienceType === "paid" ? "daily_report_paid" : "daily_report_free";
+  const mailType = buildDailyReportMailType_(audienceType, paidSlot);
   const pendingRecipients = recipients.filter(recipient => {
     const logKey = buildLogKey_(today, recipient.email, mailType);
     if (sentMap[logKey]) {
@@ -60,6 +72,17 @@ function sendDailyFinanceReportByAudience_(audienceType) {
           sendAudienceBatch_(ss, today, report, vars, batch, audienceType, mailType, group.name + "-" + (batchIndex + 1));
         });
     });
+}
+
+function buildDailyReportMailType_(audienceType, paidSlot) {
+  if (audienceType !== "paid") return "daily_report_free";
+
+  const slot = paidSlot || "morning";
+  if (["morning", "midday", "evening"].indexOf(slot) === -1) {
+    throw new Error("Unsupported paid report slot: " + slot);
+  }
+
+  return "daily_report_paid_" + slot;
 }
 
 function sendAudienceBatch_(ss, today, report, vars, recipients, audienceType, mailType, batchNumber) {
