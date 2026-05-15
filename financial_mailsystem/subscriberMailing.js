@@ -62,7 +62,7 @@ function sendDailyFinanceReportByAudience_(audienceType, paidSlot) {
   const vars = getVariables_(ss);
   const report = audienceType === "free"
     ? prepareTodayFreeMailReport_(ss, today, vars)
-    : prepareTodayMailReport_(ss, today, vars);
+    : prepareTodayPaidMailReport_(ss, today, vars, paidSlot);
   if (!report) return;
 
   const recipients = audienceType === "paid"
@@ -109,7 +109,7 @@ function sendAudienceBatch_(ss, today, report, vars, recipients, audienceType, m
     MailApp.sendEmail({
       to: toEmail,
       bcc: emails.join(","),
-      subject: buildBatchAudienceSubject_(report, recipients, audienceType),
+      subject: buildBatchAudienceSubject_(report, recipients, audienceType, vars),
       htmlBody: buildBatchAudienceFinanceReportHtml_(report, vars, recipients, audienceType),
       name: vars.sender_name || vars.brand_name || "Dean",
       replyTo: vars.reply_to_email || undefined,
@@ -150,8 +150,8 @@ function groupRecipientsForAudienceBatch_(recipients, audienceType) {
   ].filter(group => group.recipients.length > 0);
 }
 
-function buildBatchAudienceSubject_(report, recipients, audienceType) {
-  const base = SUBSCRIBER_MAIL_CONFIG.MAIL_SUBJECT_TITLE;
+function buildBatchAudienceSubject_(report, recipients, audienceType, vars) {
+  const base = buildConfiguredMailSubject_(report, vars);
   if (audienceType === "paid" && recipients.some(recipient => recipient.isExpiringSoon)) {
     return "\u7e8c\u8a02\u63d0\u9192 | " + base;
   }
@@ -177,7 +177,7 @@ function sendSingleAudienceMailForTesting_(ss, today, report, vars, recipient, a
     try {
       MailApp.sendEmail({
         to: recipient.email,
-        subject: buildAudienceSubject_(report, recipient, audienceType),
+        subject: buildAudienceSubject_(report, recipient, audienceType, vars),
         htmlBody: buildAudienceFinanceReportHtml_(report, vars, recipient, audienceType),
         name: vars.sender_name || vars.brand_name || "Dean",
         replyTo: vars.reply_to_email || undefined,
@@ -207,6 +207,19 @@ function prepareTodayMailReport_(ss, today, vars) {
   return report;
 }
 
+function prepareTodayPaidMailReport_(ss, today, vars, paidSlot) {
+  normalizeReportSheet_(ss, vars);
+  ensureNextBusinessDayReportRow_(ss);
+
+  const report = getTodayReportByPaidSlot_(ss, today, vars, paidSlot || buildPaidReportSlotForDate_(today));
+  if (!report) {
+    Logger.log("No paid report found for slot: " + (paidSlot || ""));
+    return null;
+  }
+
+  return report;
+}
+
 function prepareTodayFreeMailReport_(ss, today, vars) {
   normalizeReportSheet_(ss, vars);
   ensureNextBusinessDayReportRow_(ss);
@@ -220,7 +233,19 @@ function prepareTodayFreeMailReport_(ss, today, vars) {
   return report;
 }
 
+function getTodayReportByPaidSlot_(ss, today, vars, paidSlot) {
+  return getTodayReportBySlotPredicate_(ss, today, vars, function(subject, row, idx) {
+    return isPaidSlotMailReportCandidate_(subject, row, idx, paidSlot);
+  });
+}
+
 function getTodayMiddayReport_(ss, today, vars) {
+  return getTodayReportBySlotPredicate_(ss, today, vars, function(subject, row, idx) {
+    return isMiddayMailReportCandidate_(subject, row, idx);
+  });
+}
+
+function getTodayReportBySlotPredicate_(ss, today, vars, slotPredicate) {
   const sheet = ss.getSheetByName(CONFIG.REPORT_SHEET);
   if (!sheet) throw new Error("找不到工作表：" + CONFIG.REPORT_SHEET);
 
@@ -250,7 +275,7 @@ function getTodayMiddayReport_(ss, today, vars) {
     const reportBody = String(row[idx[reportHeader]] || "").trim();
     const subject = String(row[idx[subjectHeader]] || "").trim();
     if (rowDateText !== todayText || !reportBody) return;
-    if (!isMiddayMailReportCandidate_(subject, row, idx)) return;
+    if (!slotPredicate(subject, row, idx)) return;
 
     candidates.push({
       rowIndex: index,
@@ -270,6 +295,22 @@ function getTodayMiddayReport_(ss, today, vars) {
   return report;
 }
 
+function isPaidSlotMailReportCandidate_(subject, row, idx, paidSlot) {
+  if (paidSlot === "morning") return isMorningMailReportCandidate_(subject, row, idx);
+  if (paidSlot === "midday") return isMiddayMailReportCandidate_(subject, row, idx);
+  if (paidSlot === "evening") return isEveningMailReportCandidate_(subject, row, idx);
+  return false;
+}
+
+function isMorningMailReportCandidate_(subject, row, idx) {
+  const subjectText = String(subject || "").trim();
+  if (subjectText.indexOf("\u76e4\u4e2d") >= 0 || subjectText.indexOf("\u76e4\u5f8c") >= 0) return false;
+  if (subjectText.indexOf("\u76e4\u524d") >= 0) return true;
+
+  const generatedMinutes = getGeneratedMinutesForReportRow_(row, idx);
+  return generatedMinutes !== null && generatedMinutes >= 8 * 60 + 45 && generatedMinutes < 11 * 60 + 30;
+}
+
 function isMiddayMailReportCandidate_(subject, row, idx) {
   const subjectText = String(subject || "").trim();
   if (subjectText.indexOf("\u76e4\u524d") >= 0 || subjectText.indexOf("\u76e4\u5f8c") >= 0) return false;
@@ -278,11 +319,24 @@ function isMiddayMailReportCandidate_(subject, row, idx) {
     return true;
   }
 
-  const generatedTimeIndex = idx["\u751f\u6210\u6642\u9593"];
-  if (generatedTimeIndex === undefined) return false;
-
-  const generatedMinutes = parseTaipeiTimeToMinutes_(row[generatedTimeIndex]);
+  const generatedMinutes = getGeneratedMinutesForReportRow_(row, idx);
   return generatedMinutes !== null && generatedMinutes >= 11 * 60 + 30 && generatedMinutes < 14 * 60;
+}
+
+function isEveningMailReportCandidate_(subject, row, idx) {
+  const subjectText = String(subject || "").trim();
+  if (subjectText.indexOf("\u76e4\u524d") >= 0 || subjectText.indexOf("\u76e4\u4e2d") >= 0) return false;
+  if (subjectText.indexOf("\u76e4\u5f8c") >= 0) return true;
+
+  const generatedMinutes = getGeneratedMinutesForReportRow_(row, idx);
+  return generatedMinutes !== null && generatedMinutes >= 14 * 60;
+}
+
+function getGeneratedMinutesForReportRow_(row, idx) {
+  const generatedTimeIndex = idx["\u751f\u6210\u6642\u9593"];
+  if (generatedTimeIndex === undefined) return null;
+
+  return parseTaipeiTimeToMinutes_(row[generatedTimeIndex]);
 }
 
 function parseTaipeiTimeToMinutes_(value) {
@@ -495,8 +549,8 @@ function getSubscriptionPlanTypeForMail_(plan) {
   return "monthly";
 }
 
-function buildAudienceSubject_(report, recipient, audienceType) {
-  const base = SUBSCRIBER_MAIL_CONFIG.MAIL_SUBJECT_TITLE;
+function buildAudienceSubject_(report, recipient, audienceType, vars) {
+  const base = buildConfiguredMailSubject_(report, vars);
   if (audienceType === "paid" && recipient.isExpiringSoon) {
     return "\u7e8c\u8a02\u63d0\u9192\uff1a\u5269 " + recipient.daysLeft + " \u5929 | " + base;
   }
@@ -505,10 +559,10 @@ function buildAudienceSubject_(report, recipient, audienceType) {
 
 function buildAudienceFinanceReportHtml_(report, vars, recipient, audienceType) {
   const brandName = vars.brand_name || "Chiyo \u8ca1\u7d93";
-  const reportTitle = report["\u4fe1\u4ef6\u6a19\u984c"] || "\u6bcf\u65e5\u76e4\u4e2d\u8ca1\u7d93\u6642\u4e8b\u5831\u544a";
+  const reportTitle = report["\u4fe1\u4ef6\u6a19\u984c"] || vars.service_name || SUBSCRIBER_MAIL_CONFIG.MAIL_SUBJECT_TITLE;
   const reportBody = formatReportBody_(report["\u4eca\u65e5\u5831\u544a"] || "");
   const reportDate = formatReportDate_(report["\u5bc4\u9001\u65e5\u671f"]);
-  const officialSiteUrl = vars.official_site_url || SUBSCRIBER_MAIL_CONFIG.OFFICIAL_SITE_URL;
+  const officialSiteUrl = getOfficialSiteUrl_(vars);
   const paidSubscriptionFormUrl = vars.subscription_form_url || SUBSCRIBER_MAIL_CONFIG.PAID_SUBSCRIPTION_FORM_URL;
 
   return `
@@ -528,6 +582,18 @@ function buildAudienceFinanceReportHtml_(report, vars, recipient, audienceType) 
   </div>
 </div>
 `;
+}
+
+function buildConfiguredMailSubject_(report, vars) {
+  return vars.email_subject
+    || vars.mail_subject
+    || vars.service_name
+    || report["\u4fe1\u4ef6\u6a19\u984c"]
+    || SUBSCRIBER_MAIL_CONFIG.MAIL_SUBJECT_TITLE;
+}
+
+function getOfficialSiteUrl_(vars) {
+  return vars.official_site_url || vars.official_url || SUBSCRIBER_MAIL_CONFIG.OFFICIAL_SITE_URL;
 }
 
 function buildWelcomeSubscriberBlock_(audienceType) {

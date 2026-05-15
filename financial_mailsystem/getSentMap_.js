@@ -93,8 +93,8 @@ function normalizeLogHeader_(header) {
   return String(header || "").trim().replace(/[_\s-]/g, "").toLowerCase();
 }
 
-function buildSubject_(report, subscriber) {
-  const base = "盤中分析看天下";
+function buildSubject_(report, subscriber, vars) {
+  const base = buildConfiguredMailSubject_(report, vars || {});
 
   if (subscriber.isExpiringSoon) {
     return "【剩 " + subscriber.daysLeft + " 天到期】" + base;
@@ -105,8 +105,8 @@ function buildSubject_(report, subscriber) {
 
 function buildFinanceReportHtml_(report, vars, subscriber) {
   const brandName = vars.brand_name || "Chiyo 財經";
-  const serviceName = vars.service_name || "盤中分析看天下";
-  const subscriptionFormUrl = vars.subscription_form_url || "https://forms.gle/6L1QwdSYZzWcXGg4A";
+  const serviceName = vars.service_name || SUBSCRIBER_MAIL_CONFIG.MAIL_SUBJECT_TITLE;
+  const subscriptionFormUrl = vars.subscription_form_url || SUBSCRIBER_MAIL_CONFIG.PAID_SUBSCRIPTION_FORM_URL;
   const unsubscribeText = vars.unsubscribe_text || "若不想再收到信件，請直接回信告知。";
 
   const reportTitle = report["信件標題"] || serviceName;
@@ -115,7 +115,7 @@ function buildFinanceReportHtml_(report, vars, subscriber) {
   const expireText = Utilities.formatDate(subscriber.expireDate, CONFIG.TZ, "yyyy/MM/dd");
 
   const actionBlock = subscriber.isExpiringSoon
-    ? buildRenewalBlock_(subscriptionFormUrl, subscriber.daysLeft, expireText)
+    ? buildRenewalBlock_(subscriptionFormUrl, subscriber.daysLeft, expireText, serviceName)
     : buildPaidVersionBlock_(subscriptionFormUrl);
 
   return `
@@ -170,7 +170,7 @@ function buildPaidVersionBlock_(subscriptionFormUrl) {
 `;
 }
 
-function buildRenewalBlock_(subscriptionFormUrl, daysLeft, expireText) {
+function buildRenewalBlock_(subscriptionFormUrl, daysLeft, expireText, serviceName) {
   const title = daysLeft === 0
     ? "你的財報訂閱今天到期"
     : "你的財報訂閱剩 " + daysLeft + " 天到期";
@@ -184,7 +184,7 @@ function buildRenewalBlock_(subscriptionFormUrl, daysLeft, expireText) {
   <div style="font-size:13px;color:#a86f62;margin-bottom:8px;">訂閱提醒</div>
   <div style="font-size:20px;font-weight:700;line-height:1.5;margin-bottom:10px;color:#5a2c24;">${escapeHtml_(title)}</div>
   <div style="font-size:15px;line-height:1.8;color:#4b403b;">
-    你的盤中分析看天下訂閱將於 ${escapeHtml_(expireText)} 到期。<br>
+    你的${escapeHtml_(serviceName)}訂閱將於 ${escapeHtml_(expireText)} 到期。<br>
     如果你希望繼續收到週一至週五的財經趨勢整理，請在到期前完成續訂。<br>
     建議選擇年方案，省去每月轉帳與核對流程，也能用更低的月平均成本持續追蹤市場。
   </div>

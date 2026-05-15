@@ -74,7 +74,7 @@ function sendWelcomeReportToSubscriber_(ss, today, vars, subscriber, audienceTyp
   try {
     MailApp.sendEmail({
       to: subscriber.email,
-      subject: buildWelcomeSubject_(report, audienceType),
+      subject: buildWelcomeSubject_(report, audienceType, vars),
       htmlBody: buildAudienceFinanceReportHtml_(report, vars, subscriber, audienceType),
       name: vars.sender_name || vars.brand_name || "Dean",
       replyTo: vars.reply_to_email || undefined,
@@ -232,6 +232,6 @@ function endOfTaipeiDay_(date) {
   return parsed;
 }
 
-function buildWelcomeSubject_(report, audienceType) {
-  return SUBSCRIBER_MAIL_CONFIG.MAIL_SUBJECT_TITLE;
+function buildWelcomeSubject_(report, audienceType, vars) {
+  return buildConfiguredMailSubject_(report, vars);
 }

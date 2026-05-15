@@ -30,7 +30,7 @@ function sendTestFinanceReportToMyself() {
 
   MailApp.sendEmail({
     to: testEmail,
-    subject: "[測試] " + buildSubject_(report, subscriber),
+    subject: "[測試] " + buildSubject_(report, subscriber, vars),
     htmlBody: buildFinanceReportHtml_(report, vars, subscriber),
     name: vars.sender_name || vars.brand_name || "Dean",
     replyTo: vars.reply_to_email || undefined,

@@ -7,26 +7,11 @@ function getVariables_(ss) {
 
   values.slice(1).forEach(row => {
     const key = String(row[0] || "").trim();
-    const value = normalizeVariableValue_(key, row[1]);
+    const value = String(row[1] || "").trim();
     if (key) vars[key] = value;
   });
 
   return vars;
-}
-
-function normalizeVariableValue_(key, value) {
-  const text = String(value || "").trim();
-  if (key === "brand_name" && text === "Chiyo \u592a\u6975\u745c\u73c8") {
-    return "Chiyo \u8ca1\u7d93";
-  }
-  if (key === "service_name" && (text === "" || text === "\u6bcf\u65e5\u76e4\u4e2d\u8ca1\u7d93\u6642\u4e8b\u5831\u544a" || text === "\u6bcf\u65e5\u76e4\u4e2d\u8ca1\u7d93\u6642\u4e8b\u5feb\u5831")) {
-    return "\u76e4\u4e2d\u5206\u6790\u770b\u5929\u4e0b";
-  }
-  if (key === "subscription_form_url" && (text === "" || text === "https://forms.gle/4xvknzqcvnKVBMCj6")) {
-    return "https://forms.gle/6L1QwdSYZzWcXGg4A";
-  }
-
-  return text;
 }
 
 function getPlanDurationDays_(plan, monthlyDays, yearlyDays) {
