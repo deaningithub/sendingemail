@@ -7,25 +7,30 @@ function getVariables_(ss) {
 
   values.slice(1).forEach(row => {
     const key = String(row[0] || "").trim();
-    const value = String(row[1] || "").trim();
+    const value = normalizeVariableValue_(key, row[1]);
     if (key) vars[key] = value;
   });
 
   return vars;
 }
 
+function normalizeVariableValue_(key, value) {
+  const text = String(value || "").trim();
+  if (key === "brand_name" && text === "Chiyo \u592a\u6975\u745c\u73c8") {
+    return "Chiyo \u8ca1\u7d93";
+  }
+  if (key === "service_name" && (text === "" || text === "\u6bcf\u65e5\u76e4\u4e2d\u8ca1\u7d93\u6642\u4e8b\u5831\u544a" || text === "\u6bcf\u65e5\u76e4\u4e2d\u8ca1\u7d93\u6642\u4e8b\u5feb\u5831")) {
+    return "\u76e4\u4e2d\u5206\u6790\u770b\u5929\u4e0b";
+  }
+  if (key === "subscription_form_url" && (text === "" || text === "https://forms.gle/4xvknzqcvnKVBMCj6")) {
+    return "https://forms.gle/6L1QwdSYZzWcXGg4A";
+  }
+
+  return text;
+}
+
 function getPlanDurationDays_(plan, monthlyDays, yearlyDays) {
-  const text = String(plan || "");
-
-  if (text.indexOf("年") >= 0 || text.toLowerCase().indexOf("year") >= 0) {
-    return yearlyDays;
-  }
-
-  if (text.indexOf("月") >= 0 || text.toLowerCase().indexOf("month") >= 0) {
-    return monthlyDays;
-  }
-
-  return monthlyDays;
+  return getSubscriptionPlanTypeForMail_(plan) === "yearly" ? yearlyDays : monthlyDays;
 }
 
 function getActiveSubscribers_(ss, vars, today) {
@@ -54,9 +59,9 @@ function getActiveSubscribers_(ss, vars, today) {
 
   const monthlyDays = Number(vars.monthly_days || 30);
   const yearlyDays = Number(vars.yearly_days || 365);
-  const latestByEmail = {};
+  const recordsByEmail = {};
 
-  rows.forEach(row => {
+  rows.forEach((row, index) => {
     const email = normalizeEmail_(row[idx["Email Address"]]);
     if (!email) return;
 
@@ -65,25 +70,20 @@ function getActiveSubscribers_(ss, vars, today) {
 
     const plan = String(row[idx["請選擇訂閱方案"]] || "").trim();
     const lineName = String(row[idx["LINE 名稱或方便聯絡的名稱"]] || "").trim();
+    if (!recordsByEmail[email]) recordsByEmail[email] = [];
 
-    const durationDays = getPlanDurationDays_(plan, monthlyDays, yearlyDays);
-    const expireDate = addDays_(timestamp, durationDays);
-    const daysLeft = diffDays_(today, expireDate);
-
-    const subscriber = {
+    recordsByEmail[email].push({
       email,
       lineName,
       plan,
+      planType: getSubscriptionPlanTypeForMail_(plan),
       timestamp,
-      expireDate,
-      daysLeft,
-      isExpiringSoon: daysLeft >= 0 && daysLeft <= 3,
-    };
-
-    if (!latestByEmail[email] || timestamp > latestByEmail[email].timestamp) {
-      latestByEmail[email] = subscriber;
-    }
+      durationDays: getPlanDurationDays_(plan, monthlyDays, yearlyDays),
+      rowIndex: index,
+    });
   });
 
-  return Object.values(latestByEmail).filter(subscriber => subscriber.daysLeft >= 0);
+  return Object.keys(recordsByEmail)
+    .map(email => buildPaidSubscriberFromRecords_(recordsByEmail[email], today))
+    .filter(subscriber => subscriber && subscriber.daysLeft >= 0);
 }

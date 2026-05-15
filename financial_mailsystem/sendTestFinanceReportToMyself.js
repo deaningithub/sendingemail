@@ -21,7 +21,7 @@ function sendTestFinanceReportToMyself() {
   const subscriber = {
     email: testEmail,
     lineName: "測試用戶",
-    plan: "月訂閱｜NT$150｜每月續訂一次",
+    plan: "月訂閱｜NT$200｜每月手動續訂一次",
     timestamp: today,
     expireDate: addDays_(today, 30),
     daysLeft: 30,

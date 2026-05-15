@@ -5,11 +5,21 @@ function getSentMap_(ss, today) {
 
   if (values.length < 2) return map;
 
+  const headers = values[0].map(header => String(header).trim());
+  const dateIndex = findLogHeaderIndex_(headers, ["date"]);
+  const emailIndex = findLogHeaderIndex_(headers, ["email"]);
+  const mailTypeIndex = findLogHeaderIndex_(headers, ["mailType", "mail_type"]);
+  const statusIndex = findLogHeaderIndex_(headers, ["status"]);
+
+  if (dateIndex === -1 || emailIndex === -1 || mailTypeIndex === -1 || statusIndex === -1) {
+    throw new Error("Log sheet missing required headers: date, email, mailType, status");
+  }
+
   values.slice(1).forEach(row => {
-    const date = parseDate_(row[1]);
-    const email = normalizeEmail_(row[2]);
-    const mailType = String(row[7] || "").trim();
-    const status = String(row[8] || "").trim();
+    const date = parseDate_(row[dateIndex]);
+    const email = normalizeEmail_(row[emailIndex]);
+    const mailType = String(row[mailTypeIndex] || "").trim();
+    const status = String(row[statusIndex] || "").trim();
 
     if (!date || !email || !mailType || status !== "success") return;
 
@@ -24,36 +34,67 @@ function appendLog_(ss, today, subscriber, mailType, status, message) {
   const sheet = getOrCreateSheet_(ss, CONFIG.LOG_SHEET);
 
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow([
-      "timestamp",
-      "date",
-      "email",
-      "lineName",
-      "plan",
-      "expireDate",
-      "daysLeft",
-      "mailType",
-      "status",
-      "message",
-    ]);
+    sheet.appendRow(getDefaultLogHeaders_());
   }
 
-  sheet.appendRow([
-    new Date(),
-    Utilities.formatDate(today, CONFIG.TZ, "yyyy/MM/dd"),
-    subscriber.email,
-    subscriber.lineName,
-    subscriber.plan,
-    Utilities.formatDate(subscriber.expireDate, CONFIG.TZ, "yyyy/MM/dd"),
-    subscriber.daysLeft,
-    mailType,
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map(header => String(header).trim());
+
+  sheet.appendRow(buildLogRow_(headers, today, subscriber, mailType, status, message));
+}
+
+function getDefaultLogHeaders_() {
+  return [
+    "timestamp",
+    "date",
+    "email",
+    "lineName",
+    "plan",
+    "expireDate",
+    "daysLeft",
+    "mailType",
+    "status",
+    "message",
+  ];
+}
+
+function buildLogRow_(headers, today, subscriber, mailType, status, message) {
+  const valuesByHeader = {
+    timestamp: new Date(),
+    date: Utilities.formatDate(today, CONFIG.TZ, "yyyy/MM/dd"),
+    email: subscriber.email,
+    linename: subscriber.lineName,
+    plan: subscriber.plan,
+    expiredate: Utilities.formatDate(subscriber.expireDate, CONFIG.TZ, "yyyy/MM/dd"),
+    daysleft: subscriber.daysLeft,
+    mailtype: mailType,
     status,
     message,
-  ]);
+  };
+
+  return headers.map(header => {
+    const normalizedHeader = normalizeLogHeader_(header);
+    return Object.prototype.hasOwnProperty.call(valuesByHeader, normalizedHeader)
+      ? valuesByHeader[normalizedHeader]
+      : "";
+  });
+}
+
+function findLogHeaderIndex_(headers, names) {
+  const normalizedNames = names.map(normalizeLogHeader_);
+  for (let i = 0; i < headers.length; i++) {
+    if (normalizedNames.indexOf(normalizeLogHeader_(headers[i])) !== -1) return i;
+  }
+  return -1;
+}
+
+function normalizeLogHeader_(header) {
+  return String(header || "").trim().replace(/[_\s-]/g, "").toLowerCase();
 }
 
 function buildSubject_(report, subscriber) {
-  const base = report["信件標題"] || "每日盤中財經時事報告";
+  const base = "盤中分析看天下";
 
   if (subscriber.isExpiringSoon) {
     return "【剩 " + subscriber.daysLeft + " 天到期】" + base;
@@ -63,11 +104,9 @@ function buildSubject_(report, subscriber) {
 }
 
 function buildFinanceReportHtml_(report, vars, subscriber) {
-  const brandName = vars.brand_name || "Chiyo 太極瑜珈";
-  const serviceName = vars.service_name || "每日盤中財經時事報告";
-  const replayServiceName = vars.replay_service_name || "指定時間線上瑜珈回放課程";
-  const replayFormUrl = vars.replay_form_url || "";
-  const subscriptionFormUrl = vars.subscription_form_url || "";
+  const brandName = vars.brand_name || "Chiyo 財經";
+  const serviceName = vars.service_name || "盤中分析看天下";
+  const subscriptionFormUrl = vars.subscription_form_url || "https://forms.gle/6L1QwdSYZzWcXGg4A";
   const unsubscribeText = vars.unsubscribe_text || "若不想再收到信件，請直接回信告知。";
 
   const reportTitle = report["信件標題"] || serviceName;
@@ -77,7 +116,7 @@ function buildFinanceReportHtml_(report, vars, subscriber) {
 
   const actionBlock = subscriber.isExpiringSoon
     ? buildRenewalBlock_(subscriptionFormUrl, subscriber.daysLeft, expireText)
-    : buildReplayBlock_(replayServiceName, replayFormUrl);
+    : buildPaidVersionBlock_(subscriptionFormUrl);
 
   return `
 <div style="margin:0;padding:0;background:#f7f4f2;font-family:Arial,'Noto Sans TC',sans-serif;color:#222;">
@@ -118,21 +157,15 @@ function buildFinanceReportHtml_(report, vars, subscriber) {
 `;
 }
 
-function buildReplayBlock_(replayServiceName, replayFormUrl) {
-  const button = replayFormUrl
-    ? `<a href="${escapeHtml_(replayFormUrl)}" style="display:inline-block;margin-top:14px;padding:12px 18px;background:#2d2724;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:700;">了解回放課程</a>`
-    : "";
-
+function buildPaidVersionBlock_(subscriptionFormUrl) {
   return `
 <div style="margin:30px 0;padding:22px;background:#f3eeee;border-radius:16px;">
-  <div style="font-size:13px;color:#8c7f78;margin-bottom:8px;">今日收束</div>
-  <div style="font-size:20px;font-weight:700;line-height:1.5;margin-bottom:10px;color:#2d2724;">看完市場，回到身體。</div>
+  <div style="font-size:13px;color:#8c7f78;margin-bottom:8px;">升級付費訂閱</div>
+  <div style="font-size:20px;font-weight:700;line-height:1.5;margin-bottom:10px;color:#2d2724;">想要更完整的每日市場觀察，歡迎加入付費版。</div>
   <div style="font-size:15px;line-height:1.8;color:#4b403b;">
-    財經資訊會讓人保持警覺，但長期警覺，也會讓肩頸、胸口、下背與呼吸變得僵硬。<br>
-    如果你每天工作、看盤、閱讀新聞，卻很少真正放鬆身體，可以從「${escapeHtml_(replayServiceName)}」開始。<br>
-    不用固定時間，不用跟上別人。你只需要在一天之中，留一段時間，讓身體重新回到穩定。
+    免費版會提供盤中分析報告；付費版會提供更完整的每日財經整理與追蹤，讓你在市場變化中更快掌握重點。
   </div>
-  ${button}
+  <a href="${escapeHtml_(subscriptionFormUrl)}" style="display:inline-block;margin-top:14px;padding:12px 18px;background:#2d2724;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:700;">加入付費版訂閱</a>
 </div>
 `;
 }
@@ -151,7 +184,7 @@ function buildRenewalBlock_(subscriptionFormUrl, daysLeft, expireText) {
   <div style="font-size:13px;color:#a86f62;margin-bottom:8px;">訂閱提醒</div>
   <div style="font-size:20px;font-weight:700;line-height:1.5;margin-bottom:10px;color:#5a2c24;">${escapeHtml_(title)}</div>
   <div style="font-size:15px;line-height:1.8;color:#4b403b;">
-    你的每日盤中財經時事報告將於 ${escapeHtml_(expireText)} 到期。<br>
+    你的盤中分析看天下訂閱將於 ${escapeHtml_(expireText)} 到期。<br>
     如果你希望繼續收到週一至週五的財經趨勢整理，請在到期前完成續訂。<br>
     建議選擇年方案，省去每月轉帳與核對流程，也能用更低的月平均成本持續追蹤市場。
   </div>
@@ -191,8 +224,6 @@ function markTodayReportSent_(ss, today, vars) {
   if (idx["狀態"] === undefined) return;
 
   const todayText = Utilities.formatDate(today, CONFIG.TZ, "yyyy/MM/dd");
-  const autoSubject = buildAutoReportSubject_(today, vars);
-
   values.slice(1).forEach((row, index) => {
     const rowDate = parseDate_(row[idx["寄送日期"]]);
     if (!rowDate) return;
@@ -201,7 +232,9 @@ function markTodayReportSent_(ss, today, vars) {
 
     if (rowDateText === todayText) {
       const rowNumber = index + 2;
-      sheet.getRange(rowNumber, idx["信件標題"] + 1).setValue(autoSubject);
+      if (!row[idx["信件標題"]]) {
+        sheet.getRange(rowNumber, idx["信件標題"] + 1).setValue(buildAutoReportSubject_(today, vars));
+      }
       sheet.getRange(rowNumber, idx["狀態"] + 1).setValue("已寄送");
     }
   });
