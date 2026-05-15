@@ -8,6 +8,7 @@ const DAILY_REPORT_TRANSFER_CONFIG = {
   SOURCE_DATE_HEADER: "day",
   SOURCE_CREATED_AT_HEADER: "created_at",
   SOURCE_REPORT_HEADER: "ai_report",
+  SOURCE_MARKDOWN_HEADER: "report_markdown",
   BACKUP_HEADERS: [
     "day",
     "created_at",
@@ -107,7 +108,7 @@ function transferLatestDailyReportAndTrashSourceLocked_() {
     };
   }
 
-  const emailHtml = buildEmailHtmlFromAiReport_(latestReport.aiReport, latestReport.dayText);
+  const emailHtml = buildEmailHtmlFromAiReport_(latestReport.aiReport, latestReport.reportMarkdown, latestReport.dayText);
   writeDailyAiReportToTarget_(latestReport, today, emailHtml);
 
   return {
@@ -330,6 +331,7 @@ function findLatestDailyAiReport_(today, activeSlot) {
     config.SOURCE_DATE_HEADER,
     config.SOURCE_CREATED_AT_HEADER,
     config.SOURCE_REPORT_HEADER,
+    config.SOURCE_MARKDOWN_HEADER,
   ];
 
   requiredHeaders.forEach(header => {
@@ -341,6 +343,7 @@ function findLatestDailyAiReport_(today, activeSlot) {
     .map((row, index) => {
       const day = parseDate_(row[idx[config.SOURCE_DATE_HEADER]]);
       const aiReport = String(row[idx[config.SOURCE_REPORT_HEADER]] || "").trim();
+      const reportMarkdown = String(row[idx[config.SOURCE_MARKDOWN_HEADER]] || "").trim();
       if (!day || !aiReport) return null;
 
       const dayText = Utilities.formatDate(day, CONFIG.TZ, "yyyy-MM-dd");
@@ -359,6 +362,7 @@ function findLatestDailyAiReport_(today, activeSlot) {
         generatedTimeText: Utilities.formatDate(createdAt, CONFIG.TZ, "HH:mm:ss"),
         slot: activeSlot,
         aiReport,
+        reportMarkdown,
       };
     })
     .filter(Boolean)

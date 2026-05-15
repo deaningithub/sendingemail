@@ -7,23 +7,11 @@ const OPENAI_EMAIL_REPORT_CONFIG = {
   REQUIRED_CLOSING_HTML: "<p>我是Dean開發的AI全球趨勢追縱系統，希望能夠創造你的財富自由，邀請你關注並支持Dean的夢想。</p>",
 };
 
-function buildEmailHtmlFromAiReport_(aiReport, reportDateText) {
+function buildEmailHtmlFromAiReport_(aiReport, reportMarkdown, reportDateText) {
   const apiToken = getOpenAiApiToken_();
   const payload = {
     model: getOpenAiModel_(),
-    input: buildEmailReportPrompt_(aiReport, reportDateText),
-    tools: [
-      {
-        type: "web_search",
-        user_location: {
-          type: "approximate",
-          country: "TW",
-          city: "Taipei",
-          region: "Taipei",
-        },
-      },
-    ],
-    tool_choice: "auto",
+    input: buildEmailReportPrompt_(aiReport, reportMarkdown, reportDateText),
     max_output_tokens: 5000,
   };
 
@@ -67,9 +55,10 @@ function getOpenAiModel_() {
     OPENAI_EMAIL_REPORT_CONFIG.DEFAULT_MODEL;
 }
 
-function buildEmailReportPrompt_(aiReport, reportDateText) {
+function buildEmailReportPrompt_(aiReport, reportMarkdown, reportDateText) {
   return [
-    "你是一位可信任的財經口播編輯，請把我提供的每日 ai_report 改寫成可以直接放進 Gmail 的 HTML 信件內容。",
+    "你是一位可信任的財經口播編輯。請只根據我提供的 ai_report 與 report_markdown，改寫成可以直接放進 Gmail 的 HTML 信件內容。",
+    "你不需要、也不可以自行查網頁或補外部資料。ai_report 已經是從 report_markdown 整理出的參數與重點；你的任務是把它有故事、有脈絡地說出來。",
     "",
     "日期：" + reportDateText,
     "",
@@ -86,8 +75,8 @@ function buildEmailReportPrompt_(aiReport, reportDateText) {
     "10. 不要使用表格。",
     "11. 請保留舒服的閱讀節奏。",
     "12. 語氣要自然、清楚、有信任感。",
-    "13. 內容要補足相關新聞詳細資訊，以及說明為何造成金融市場影響。",
-    "14. 請搜尋一個今日重大時事新聞，整合成信件內容的一段，並說明它和金融市場的關聯。",
+    "13. 內容只能使用 ai_report 與 report_markdown 內已存在的資訊，不要新增未提供的公司、數字、新聞、出處或連結。",
+    "14. 請將 ai_report 的結論和 report_markdown 的脈絡串成故事，說清楚市場正在發生什麼、為何重要、可能影響哪些風險與資產。",
     "15. 最後一段必須是 <p>我是Dean開發的AI全球趨勢追縱系統，希望能夠創造你的財富自由，邀請你關注並支持Dean的夢想。</p>",
     "16. 只輸出 HTML 片段，不要輸出 ```html 或任何程式碼區塊標記。",
     "17. 不要輸出任何任務說明、改寫說明、整理說明、日期說明或自我描述，例如「以下為」、「經整理」、「適合 Gmail」、「可以直接使用」、「每日 AI 市場報告」這類句子。",
@@ -95,6 +84,9 @@ function buildEmailReportPrompt_(aiReport, reportDateText) {
     "",
     "每日 ai_report：",
     aiReport,
+    "",
+    "原始 report_markdown：",
+    reportMarkdown || "（未提供 report_markdown，請只使用 ai_report。）",
   ].join("\n");
 }
 
