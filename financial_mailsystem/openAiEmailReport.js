@@ -90,6 +90,8 @@ function buildEmailReportPrompt_(aiReport, reportDateText) {
     "14. 請搜尋一個今日重大時事新聞，整合成信件內容的一段，並說明它和金融市場的關聯。",
     "15. 最後一段必須是 <p>我是Dean開發的AI全球趨勢追縱系統，希望能夠創造你的財富自由，邀請你關注並支持Dean的夢想。</p>",
     "16. 只輸出 HTML 片段，不要輸出 ```html 或任何程式碼區塊標記。",
+    "17. 不要輸出任何任務說明、改寫說明、整理說明、日期說明或自我描述，例如「以下為」、「經整理」、「適合 Gmail」、「可以直接使用」、「每日 AI 市場報告」這類句子。",
+    "18. 第一個 <h2> 後面必須直接開始市場內容，不要加入介紹這份報告如何生成或如何使用的段落。",
     "",
     "每日 ai_report：",
     aiReport,
@@ -128,6 +130,7 @@ function trimOpenAiEmailHtml_(value) {
 
   html = trimBeforeFirstHeadingTag_(html);
   html = trimAfterLastEmailHtmlTag_(html);
+  html = removePromptEchoParagraphs_(html);
   html = enforceRequiredEmailReportTitle_(html);
   html = enforceRequiredEmailReportClosing_(html);
 
@@ -151,6 +154,40 @@ function trimAfterLastEmailHtmlTag_(html) {
 
   if (lastEndIndex === -1) return html;
   return html.slice(0, lastEndIndex);
+}
+
+function removePromptEchoParagraphs_(html) {
+  return String(html || "")
+    .replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi, paragraph => {
+      const text = paragraph
+        .replace(/<[^>]+>/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      return isPromptEchoText_(text) ? "" : paragraph;
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function isPromptEchoText_(text) {
+  const normalizedText = String(text || "").replace(/\s+/g, "");
+  if (!normalizedText) return false;
+
+  const promptEchoPhrases = [
+    "以下為",
+    "經整理",
+    "適合Gmail",
+    "可以直接使用",
+    "直接放進Gmail",
+    "每日AI市場報告",
+    "HTML信件內容",
+    "語氣自然清晰",
+    "專業與信任",
+  ];
+  const matches = promptEchoPhrases.filter(phrase => normalizedText.indexOf(phrase) !== -1).length;
+
+  return matches >= 2;
 }
 
 function enforceRequiredEmailReportTitle_(html) {
