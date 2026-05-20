@@ -1,7 +1,7 @@
 function normalizeReportSheet_(ss, vars) {
   const sheet = getOrCreateSheet_(ss, CONFIG.REPORT_SHEET);
   const values = sheet.getDataRange().getValues();
-  const requiredHeaders = ["寄送日期", "信件標題", "今日報告", "狀態"];
+  const requiredHeaders = ["寄送日期", "信件標題", "今日報告", "狀態", "寄送時間", "生成時間", "轉入時間", "run_id"];
 
   if (values.length === 0 || sheet.getLastRow() === 0) {
     sheet.appendRow(requiredHeaders);
@@ -23,12 +23,20 @@ function normalizeReportSheet_(ss, vars) {
     const dateValue = getFirstExistingColumnValue_(row, oldIdx, ["寄送日期", "日期", "date"]);
     const titleValue = getFirstExistingColumnValue_(row, oldIdx, ["信件標題", "標題", "subject"]);
     const statusValue = getFirstExistingColumnValue_(row, oldIdx, ["狀態", "status"]);
+    const sentTimeValue = getFirstExistingColumnValue_(row, oldIdx, ["寄送時間", "sentTime", "sent_time"]);
+    const generatedTimeValue = getFirstExistingColumnValue_(row, oldIdx, ["生成時間", "generatedTime", "generated_time"]);
+    const transferredTimeValue = getFirstExistingColumnValue_(row, oldIdx, ["轉入時間", "transferredTime", "transferred_time"]);
+    const runIdValue = getFirstExistingColumnValue_(row, oldIdx, ["run_id", "runId"]);
 
     sheet.appendRow([
       dateValue || "",
       titleValue || "",
       reportText || "",
       statusValue || "待寄送",
+      sentTimeValue || "",
+      generatedTimeValue || "",
+      transferredTimeValue || "",
+      runIdValue || "",
     ]);
   });
 }

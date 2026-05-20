@@ -19,43 +19,34 @@ const SUBSCRIBER_MAIL_CONFIG = {
   OFFICIAL_SITE_URL: "https://sites.google.com/view/taichiyo/%E6%89%80%E6%9C%89%E8%AA%B2%E7%A8%8B",
   EXPIRING_SOON_DAYS: 3,
   MAX_RECIPIENTS_PER_EMAIL: 50,
+  MORNING_SLOT_START_MINUTE: 8 * 60 + 45,
+  MIDDAY_SLOT_START_MINUTE: 11 * 60 + 30,
+  EVENING_SLOT_START_MINUTE: 14 * 60,
 };
 
-function sendDailyPaidFinanceReport() {
-  sendDailyFinanceReportByAudience_("paid", buildPaidReportSlotForDate_(new Date()));
+function sendPaidSubscriptionFinanceReportsNow() {
+  return sendAvailablePaidSubscriptionReports_();
 }
 
-function sendDailyPaidMorningReport() {
-  sendDailyFinanceReportByAudience_("paid", "morning");
+function sendFreeMiddayFinanceReport() {
+  return sendFinanceReportByAudience_("free", "midday");
 }
 
-function sendDailyPaidMiddayReport() {
-  sendDailyFinanceReportByAudience_("paid", "midday");
+function sendPaidFinanceReportBySlot_(paidSlot) {
+  return sendFinanceReportByAudience_("paid", paidSlot);
 }
 
-function sendDailyPaidEveningReport() {
-  sendDailyFinanceReportByAudience_("paid", "evening");
+function sendAvailablePaidSubscriptionReports_() {
+  return ["morning", "midday", "evening"].reduce((sentCount, paidSlot) => {
+    return sentCount + sendPaidFinanceReportBySlot_(paidSlot);
+  }, 0);
 }
 
-function sendDailyFreeFinanceReport() {
-  sendDailyFinanceReportByAudience_("free");
-}
-
-function buildPaidReportSlotForDate_(date) {
-  const hour = Number(Utilities.formatDate(date, CONFIG.TZ, "H"));
-  const minute = Number(Utilities.formatDate(date, CONFIG.TZ, "m"));
-  const minutes = hour * 60 + minute;
-
-  if (minutes < 9 * 60 + 30) return "morning";
-  if (minutes < 14 * 60) return "midday";
-  return "evening";
-}
-
-function sendDailyFinanceReportByAudience_(audienceType, paidSlot) {
+function sendFinanceReportByAudience_(audienceType, paidSlot) {
   const today = new Date();
   if (isWeekend_(today)) {
     Logger.log("Weekend; skip daily finance report.");
-    return;
+    return 0;
   }
 
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
@@ -63,7 +54,7 @@ function sendDailyFinanceReportByAudience_(audienceType, paidSlot) {
   const report = audienceType === "free"
     ? prepareTodayFreeMailReport_(ss, today, vars)
     : prepareTodayPaidMailReport_(ss, today, vars, paidSlot);
-  if (!report) return;
+  if (!report) return 0;
 
   const recipients = audienceType === "paid"
     ? getActivePaidSubscribersForMail_(ss, vars, today)
@@ -76,16 +67,33 @@ function sendDailyFinanceReportByAudience_(audienceType, paidSlot) {
       Logger.log("Already sent " + mailType + " to " + recipient.email);
       return false;
     }
+
+    if (audienceType === "free") {
+      const welcomeLogKey = buildLogKey_(today, recipient.email, "welcome_free");
+      if (sentMap[welcomeLogKey]) {
+        Logger.log("Already sent welcome_free to " + recipient.email + "; skip daily_report_free today.");
+        return false;
+      }
+    }
+
     return true;
   });
+
+  let sentCount = 0;
 
   groupRecipientsForAudienceBatch_(pendingRecipients, audienceType)
     .forEach(group => {
       chunkRecipients_(group.recipients, SUBSCRIBER_MAIL_CONFIG.MAX_RECIPIENTS_PER_EMAIL)
         .forEach((batch, batchIndex) => {
-          sendAudienceBatch_(ss, today, report, vars, batch, audienceType, mailType, group.name + "-" + (batchIndex + 1));
+          sentCount += sendAudienceBatch_(ss, today, report, vars, batch, audienceType, mailType, group.name + "-" + (batchIndex + 1));
         });
     });
+
+  if (sentCount > 0) {
+    markMailReportSent_(ss, report, new Date());
+  }
+
+  return sentCount;
 }
 
 function buildDailyReportMailType_(audienceType, paidSlot) {
@@ -100,7 +108,7 @@ function buildDailyReportMailType_(audienceType, paidSlot) {
 }
 
 function sendAudienceBatch_(ss, today, report, vars, recipients, audienceType, mailType, batchNumber) {
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) return 0;
 
   const emails = recipients.map(recipient => recipient.email);
   const toEmail = vars.reply_to_email || Session.getActiveUser().getEmail();
@@ -118,10 +126,12 @@ function sendAudienceBatch_(ss, today, report, vars, recipients, audienceType, m
     recipients.forEach(recipient => {
       appendLog_(ss, today, recipient, mailType, "success", "sent batch " + batchNumber);
     });
+    return recipients.length;
   } catch (error) {
     recipients.forEach(recipient => {
       appendLog_(ss, today, recipient, mailType, "error", error.message);
     });
+    return 0;
   }
 }
 
@@ -184,8 +194,10 @@ function sendSingleAudienceMailForTesting_(ss, today, report, vars, recipient, a
       });
 
       appendLog_(ss, today, recipient, mailType, "success", "sent");
+      return 1;
     } catch (error) {
       appendLog_(ss, today, recipient, mailType, "error", error.message);
+      return 0;
     }
 }
 
@@ -211,7 +223,7 @@ function prepareTodayPaidMailReport_(ss, today, vars, paidSlot) {
   normalizeReportSheet_(ss, vars);
   ensureNextBusinessDayReportRow_(ss);
 
-  const report = getTodayReportByPaidSlot_(ss, today, vars, paidSlot || buildPaidReportSlotForDate_(today));
+  const report = getTodayReportByPaidSlot_(ss, today, vars, paidSlot);
   if (!report) {
     Logger.log("No paid report found for slot: " + (paidSlot || ""));
     return null;
@@ -223,6 +235,11 @@ function prepareTodayPaidMailReport_(ss, today, vars, paidSlot) {
 function prepareTodayFreeMailReport_(ss, today, vars) {
   normalizeReportSheet_(ss, vars);
   ensureNextBusinessDayReportRow_(ss);
+
+  if (getTaipeiMinutesOfDayForMail_(today) < SUBSCRIBER_MAIL_CONFIG.MIDDAY_SLOT_START_MINUTE) {
+    Logger.log("Midday report window has not started; skip free subscribers.");
+    return null;
+  }
 
   const report = getTodayMiddayReport_(ss, today, vars);
   if (!report) {
@@ -304,32 +321,44 @@ function isPaidSlotMailReportCandidate_(subject, row, idx, paidSlot) {
 
 function isMorningMailReportCandidate_(subject, row, idx) {
   const subjectText = String(subject || "").trim();
-  if (subjectText.indexOf("\u76e4\u4e2d") >= 0 || subjectText.indexOf("\u76e4\u5f8c") >= 0) return false;
-  if (subjectText.indexOf("\u76e4\u524d") >= 0) return true;
+  if (isKnownReportSlotTitle_(subjectText)) return subjectText === "<\u76e4\u524d\u5206\u6790>";
 
   const generatedMinutes = getGeneratedMinutesForReportRow_(row, idx);
-  return generatedMinutes !== null && generatedMinutes >= 8 * 60 + 45 && generatedMinutes < 11 * 60 + 30;
+  return generatedMinutes !== null
+    && generatedMinutes >= SUBSCRIBER_MAIL_CONFIG.MORNING_SLOT_START_MINUTE
+    && generatedMinutes < SUBSCRIBER_MAIL_CONFIG.MIDDAY_SLOT_START_MINUTE;
 }
 
 function isMiddayMailReportCandidate_(subject, row, idx) {
   const subjectText = String(subject || "").trim();
-  if (subjectText.indexOf("\u76e4\u524d") >= 0 || subjectText.indexOf("\u76e4\u5f8c") >= 0) return false;
-
-  if (subjectText.indexOf("\u76e4\u4e2d") >= 0 && subjectText !== SUBSCRIBER_MAIL_CONFIG.MAIL_SUBJECT_TITLE) {
-    return true;
-  }
+  if (isKnownReportSlotTitle_(subjectText)) return subjectText === "<\u76e4\u4e2d\u5feb\u5831>";
 
   const generatedMinutes = getGeneratedMinutesForReportRow_(row, idx);
-  return generatedMinutes !== null && generatedMinutes >= 11 * 60 + 30 && generatedMinutes < 14 * 60;
+  return generatedMinutes !== null
+    && generatedMinutes >= SUBSCRIBER_MAIL_CONFIG.MIDDAY_SLOT_START_MINUTE
+    && generatedMinutes < SUBSCRIBER_MAIL_CONFIG.EVENING_SLOT_START_MINUTE;
 }
 
 function isEveningMailReportCandidate_(subject, row, idx) {
   const subjectText = String(subject || "").trim();
-  if (subjectText.indexOf("\u76e4\u524d") >= 0 || subjectText.indexOf("\u76e4\u4e2d") >= 0) return false;
-  if (subjectText.indexOf("\u76e4\u5f8c") >= 0) return true;
+  if (isKnownReportSlotTitle_(subjectText)) return subjectText === "<\u76e4\u5f8c\u6574\u7406>";
 
   const generatedMinutes = getGeneratedMinutesForReportRow_(row, idx);
-  return generatedMinutes !== null && generatedMinutes >= 14 * 60;
+  return generatedMinutes !== null && generatedMinutes >= SUBSCRIBER_MAIL_CONFIG.EVENING_SLOT_START_MINUTE;
+}
+
+function isKnownReportSlotTitle_(subjectText) {
+  return [
+    "<\u76e4\u524d\u5206\u6790>",
+    "<\u76e4\u4e2d\u5feb\u5831>",
+    "<\u76e4\u5f8c\u6574\u7406>",
+  ].indexOf(String(subjectText || "").trim()) !== -1;
+}
+
+function getTaipeiMinutesOfDayForMail_(date) {
+  const hour = Number(Utilities.formatDate(date, CONFIG.TZ, "H"));
+  const minute = Number(Utilities.formatDate(date, CONFIG.TZ, "m"));
+  return hour * 60 + minute;
 }
 
 function getGeneratedMinutesForReportRow_(row, idx) {
@@ -463,18 +492,12 @@ function getActiveFreeSubscribersForMail_(ss, today) {
   });
 
   const cancelMap = getLatestFreeCancelChoiceByEmail_(ss);
-  const paidEmails = getActivePaidSubscribersForMail_(ss, getVariables_(ss), today)
-    .reduce((map, subscriber) => {
-      map[subscriber.email] = true;
-      return map;
-    }, {});
   const latestByEmail = {};
 
   values.slice(1).forEach(row => {
     const email = normalizeEmail_(row[idx[SUBSCRIBER_MAIL_CONFIG.FREE_EMAIL_HEADER]]);
     const timestamp = parseDate_(row[idx[SUBSCRIBER_MAIL_CONFIG.FREE_TIMESTAMP_HEADER]]);
     if (!email || !timestamp) return;
-    if (paidEmails[email]) return;
 
     const cancelChoice = cancelMap[email] && cancelMap[email].choice;
     if (cancelChoice === SUBSCRIBER_MAIL_CONFIG.CANCEL_CHOICE_CANCEL) return;
@@ -562,26 +585,49 @@ function buildAudienceFinanceReportHtml_(report, vars, recipient, audienceType) 
   const reportTitle = report["\u4fe1\u4ef6\u6a19\u984c"] || vars.service_name || SUBSCRIBER_MAIL_CONFIG.MAIL_SUBJECT_TITLE;
   const reportBody = formatReportBody_(report["\u4eca\u65e5\u5831\u544a"] || "");
   const reportDate = formatReportDate_(report["\u5bc4\u9001\u65e5\u671f"]);
+  const reportSlotLabel = getReportSlotLabelForMail_(reportTitle);
+  const audienceLabel = audienceType === "paid" ? "\u4ed8\u8cbb\u7248" : "\u514d\u8cbb\u7248";
   const officialSiteUrl = getOfficialSiteUrl_(vars);
   const paidSubscriptionFormUrl = vars.subscription_form_url || SUBSCRIBER_MAIL_CONFIG.PAID_SUBSCRIPTION_FORM_URL;
+  const yogaCourseFormUrl = getYogaCourseFormUrl_(vars);
 
   return `
-<div style="margin:0;padding:0;background:#f7f4f2;font-family:Arial,'Noto Sans TC',sans-serif;color:#222;">
-  <div style="max-width:760px;margin:0 auto;padding:28px 16px;">
-    <div style="background:#ffffff;border-radius:18px;padding:28px;border:1px solid #e6ded9;">
-      <div style="font-size:14px;color:#8c7f78;margin-bottom:8px;">${escapeHtml_(brandName)}</div>
-      <h1 style="font-size:26px;line-height:1.35;margin:0 0 12px;color:#2d2724;">${escapeHtml_(reportTitle)}</h1>
-      <div style="font-size:14px;color:#8c7f78;margin-bottom:24px;">${escapeHtml_(reportDate)}</div>
+<div style="margin:0;padding:0;background:#f3f5f7;font-family:Arial,'Noto Sans TC',sans-serif;color:#222;">
+  <div style="max-width:780px;margin:0 auto;padding:28px 14px;">
+    <div style="background:#ffffff;border:1px solid #dfe5ea;">
+      <div style="padding:24px 28px 20px;background:#202833;color:#ffffff;">
+        <div style="font-size:13px;letter-spacing:0;color:#b7c2cf;margin-bottom:8px;">${escapeHtml_(brandName)}</div>
+        <h1 style="font-size:26px;line-height:1.35;margin:0 0 14px;color:#ffffff;">${escapeHtml_(reportTitle)}</h1>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;">
+          <tr>
+            <td style="font-size:13px;line-height:1.6;color:#dce4ec;padding:0 16px 0 0;">${escapeHtml_(reportDate)}</td>
+            <td align="right" style="font-size:13px;line-height:1.6;color:#dce4ec;padding:0;">
+              <span style="display:inline-block;padding:4px 9px;border:1px solid #506071;background:#2b3542;color:#ffffff;">${escapeHtml_(reportSlotLabel)}</span>
+              <span style="display:inline-block;padding:4px 9px;border:1px solid #506071;background:#2b3542;color:#ffffff;margin-left:6px;">${escapeHtml_(audienceLabel)}</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding:26px 28px 28px;">
       ${recipient.isWelcome ? buildWelcomeSubscriberBlock_(audienceType) : ""}
-      <div style="font-size:16px;line-height:1.95;color:#332d29;">${reportBody}</div>
+      <div style="font-size:16px;line-height:1.95;color:#25313d;">${reportBody}</div>
       ${audienceType === "free" ? buildPaidSubscriptionCtaBlock_(paidSubscriptionFormUrl) : ""}
       ${audienceType === "paid"
-        ? buildPaidSubscriberBlock_(vars, recipient, officialSiteUrl)
-        : buildFreeSubscriberBlock_(vars, paidSubscriptionFormUrl)}
+        ? buildPaidSubscriberBlock_(vars, recipient, officialSiteUrl) + buildPaidYogaCourseBlock_(yogaCourseFormUrl, officialSiteUrl)
+        : buildFreeSubscriberBlock_(vars, paidSubscriptionFormUrl, officialSiteUrl)}
+      </div>
     </div>
   </div>
 </div>
 `;
+}
+
+function getReportSlotLabelForMail_(reportTitle) {
+  const title = String(reportTitle || "");
+  if (title.indexOf("\u76e4\u524d") !== -1 || title.indexOf("morning") !== -1) return "\u76e4\u524d\u5831\u544a";
+  if (title.indexOf("\u76e4\u5f8c") !== -1 || title.indexOf("evening") !== -1 || title.indexOf("post") !== -1) return "\u76e4\u5f8c\u6574\u7406";
+  if (title.indexOf("\u76e4\u4e2d") !== -1 || title.indexOf("midday") !== -1 || title.indexOf("intraday") !== -1) return "\u76e4\u4e2d\u5feb\u5831";
+  return "\u6bcf\u65e5\u5e02\u5834\u5831\u544a";
 }
 
 function buildConfiguredMailSubject_(report, vars) {
@@ -594,6 +640,10 @@ function buildConfiguredMailSubject_(report, vars) {
 
 function getOfficialSiteUrl_(vars) {
   return vars.official_site_url || vars.official_url || SUBSCRIBER_MAIL_CONFIG.OFFICIAL_SITE_URL;
+}
+
+function getYogaCourseFormUrl_(vars) {
+  return vars.yoga_course_form_url || vars.replay_form_url || SUBSCRIBER_MAIL_CONFIG.YOGA_COURSE_FORM_URL;
 }
 
 function buildWelcomeSubscriberBlock_(audienceType) {
@@ -670,10 +720,35 @@ function buildPaidRenewalBlock_(subscriptionFormUrl, recipient) {
 `;
 }
 
-function buildFreeSubscriberBlock_(vars, paidSubscriptionFormUrl) {
+function buildPaidYogaCourseBlock_(yogaCourseFormUrl, officialSiteUrl) {
+  const signupButton = yogaCourseFormUrl
+    ? `<a href="${escapeHtml_(yogaCourseFormUrl)}" style="display:inline-block;margin-top:14px;margin-right:10px;padding:12px 18px;background:#2d2724;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:700;">立即報名線上瑜珈課程</a>`
+    : "";
+  const officialLink = officialSiteUrl
+    ? `<div style="margin-top:12px;"><a href="${escapeHtml_(officialSiteUrl)}" style="color:#7a6d66;font-weight:700;">查看 Dean 官方網站與所有課程</a></div>`
+    : "";
+
+  return `
+<div style="margin:30px 0 0;padding:22px;background:#f7f3ee;border:1px solid #eadfd6;border-radius:16px;">
+  <div style="font-size:13px;color:#8c7f78;margin-bottom:8px;">Dean's Online Yoga</div>
+  <div style="font-size:20px;font-weight:700;line-height:1.5;margin-bottom:10px;color:#2d2724;">最好的投資，是自己的健康。</div>
+  <div style="font-size:15px;line-height:1.8;color:#4b403b;">
+    財務決策需要清楚的頭腦，而清楚的頭腦來自穩定的身體和呼吸。<br>
+    邀請你今天就開啟 Dean 的線上瑜珈課程，把照顧自己放回最重要的位置。
+  </div>
+  ${signupButton}
+  ${officialLink}
+</div>
+`;
+}
+
+function buildFreeSubscriberBlock_(vars, paidSubscriptionFormUrl, officialSiteUrl) {
   const unsubscribeUrl = vars.free_unsubscribe_form_url || vars.unsubscribe_form_url || "";
   const unsubscribeLine = unsubscribeUrl
     ? `<div style="margin-top:10px;"><a href="${escapeHtml_(unsubscribeUrl)}" style="color:#8c7f78;">\u8abf\u6574\u6216\u53d6\u6d88\u514d\u8cbb\u8a02\u95b1</a></div>`
+    : "";
+  const officialLine = officialSiteUrl
+    ? `<div style="margin-top:10px;"><a href="${escapeHtml_(officialSiteUrl)}" style="color:#8c7f78;">查看 Dean 官方網站與所有課程</a></div>`
     : "";
 
   return `
@@ -681,6 +756,7 @@ function buildFreeSubscriberBlock_(vars, paidSubscriptionFormUrl) {
   <div>\u4f60\u76ee\u524d\u662f\u514d\u8cbb\u8a02\u95b1\uff0c\u9019\u5c01\u4fe1\u6703\u4fdd\u6301\u8f15\u91cf\u7684\u966a\u4f34\u8207\u4e92\u52d5\u3002</div>
   <div>\u60f3\u8981\u66f4\u5b8c\u6574\u7684\u6bcf\u65e5\u8ca1\u7d93\u6574\u7406\uff0c\u4e5f\u6b61\u8fce\u5347\u7d1a\u4ed8\u8cbb\u8a02\u95b1\u3002</div>
   <div style="margin-top:10px;"><a href="${escapeHtml_(paidSubscriptionFormUrl)}" style="color:#8c7f78;">\u5347\u7d1a\u4ed8\u8cbb\u7248\u8a02\u95b1</a></div>
+  ${officialLine}
   ${unsubscribeLine}
 </div>
 `;

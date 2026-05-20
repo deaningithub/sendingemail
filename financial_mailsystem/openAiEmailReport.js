@@ -3,8 +3,8 @@ const OPENAI_EMAIL_REPORT_CONFIG = {
   MODEL_PROPERTY: "OPENAI_MODEL",
   DEFAULT_MODEL: "gpt-4.1",
   RESPONSES_URL: "https://api.openai.com/v1/responses",
-  REQUIRED_TITLE_HTML: "<h2>今日及時市場報告</h2>",
-  REQUIRED_CLOSING_HTML: "<p>我是Dean開發的AI全球趨勢追縱系統，希望能夠創造你的財富自由，邀請你關注並支持Dean的夢想。</p>",
+  REQUIRED_TITLE_HTML: "<h2>\u4eca\u65e5\u53ca\u6642\u5e02\u5834\u5831\u544a</h2>",
+  REQUIRED_CLOSING_HTML: "<p>\u6211\u662fDean\u958b\u767c\u7684AI\u5168\u7403\u8da8\u52e2\u8ffd\u8e64\u7cfb\u7d71\uff0c\u5e0c\u671b\u80fd\u5920\u5275\u9020\u4f60\u7684\u8ca1\u5bcc\u81ea\u7531\uff0c\u9080\u8acb\u4f60\u95dc\u6ce8\u4e26\u652f\u6301Dean\u7684\u5922\u60f3\u3002</p>",
 };
 
 function buildEmailHtmlFromAiReport_(aiReport, reportMarkdown, reportDateText) {
@@ -57,36 +57,29 @@ function getOpenAiModel_() {
 
 function buildEmailReportPrompt_(aiReport, reportMarkdown, reportDateText) {
   return [
-    "你是一位可信任的財經口播編輯。請只根據我提供的 ai_report 與 report_markdown，改寫成可以直接放進 Gmail 的 HTML 信件內容。",
-    "你不需要、也不可以自行查網頁或補外部資料。ai_report 已經是從 report_markdown 整理出的參數與重點；你的任務是把它有故事、有脈絡地說出來。",
+    "\u4f60\u662f\u4e00\u4f4d\u53ef\u4fe1\u4efb\u7684\u8ca1\u7d93\u7de8\u8f2f\u8207\u6295\u8cc7\u7b56\u7565\u7c21\u5831\u8a2d\u8a08\u5e2b\u3002\u8acb\u53ea\u6839\u64da\u6211\u63d0\u4f9b\u7684 ai_report \u8207 report_markdown\uff0c\u6539\u5beb\u6210\u53ef\u4ee5\u76f4\u63a5\u653e\u9032 Gmail / Google Apps Script \u7684 HTML \u4fe1\u4ef6\u7247\u6bb5\u3002",
+    "\u4f60\u4e0d\u9700\u8981\u3001\u4e5f\u4e0d\u53ef\u4ee5\u81ea\u884c\u67e5\u7db2\u9801\u6216\u88dc\u5916\u90e8\u8cc7\u6599\u3002\u6240\u6709\u516c\u53f8\u3001\u6307\u6578\u3001\u6578\u5b57\u3001\u65b0\u805e\u8207\u7d50\u8ad6\u90fd\u5fc5\u9808\u4f86\u81ea\u8f38\u5165\u5167\u5bb9\u3002",
     "",
-    "日期：" + reportDateText,
+    "\u65e5\u671f\uff1a" + reportDateText,
     "",
-    "輸出規則：",
-    "1. 報告使用 HTML 格式輸出。",
-    "2. 段落要清楚，不要重複。",
-    "3. 第一個標題必須是 <h2>今日及時市場報告</h2>。",
-    "4. 重要標題請用 <h2> 或 <h3>。",
-    "5. 一般段落請用 <p>。",
-    "6. 需要換行的地方請用 <br>。",
-    "7. 重點文字請用 <strong>。",
-    "8. 整體要適合 Gmail / Google Apps Script 寄信。",
-    "9. 不要使用 Markdown。",
-    "10. 不要使用表格。",
-    "11. 請保留舒服的閱讀節奏。",
-    "12. 語氣要自然、清楚、有信任感。",
-    "13. 內容只能使用 ai_report 與 report_markdown 內已存在的資訊，不要新增未提供的公司、數字、新聞、出處或連結。",
-    "14. 請將 ai_report 的結論和 report_markdown 的脈絡串成故事，說清楚市場正在發生什麼、為何重要、可能影響哪些風險與資產。",
-    "15. 最後一段必須是 <p>我是Dean開發的AI全球趨勢追縱系統，希望能夠創造你的財富自由，邀請你關注並支持Dean的夢想。</p>",
-    "16. 只輸出 HTML 片段，不要輸出 ```html 或任何程式碼區塊標記。",
-    "17. 不要輸出任何任務說明、改寫說明、整理說明、日期說明或自我描述，例如「以下為」、「經整理」、「適合 Gmail」、「可以直接使用」、「每日 AI 市場報告」這類句子。",
-    "18. 第一個 <h2> 後面必須直接開始市場內容，不要加入介紹這份報告如何生成或如何使用的段落。",
+    "\u8f38\u51fa\u898f\u683c\uff1a",
+    "1. \u53ea\u8f38\u51fa HTML \u7247\u6bb5\uff0c\u4e0d\u8981\u8f38\u51fa ```html\u3001Markdown\u3001\u8aaa\u660e\u6587\u6216\u81ea\u6211\u63cf\u8ff0\u3002",
+    "2. \u7b2c\u4e00\u500b\u6a19\u984c\u5fc5\u9808\u662f <h2>\u4eca\u65e5\u53ca\u6642\u5e02\u5834\u5831\u544a</h2>\u3002",
+    "3. \u8acb\u7528\u5c08\u696d\u4fe1\u4ef6\u5e03\u5c40\uff1a\u958b\u5834\u7e3d\u7d50\u3001\u95dc\u9375\u6578\u64da\u8868\u3001\u5e02\u5834\u8108\u7d61\u3001\u98a8\u96aa\u89c0\u5bdf\u3001\u4eca\u65e5\u95dc\u6ce8\u91cd\u9ede\u3001\u7d50\u8a9e\u3002",
+    "4. \u51e1\u662f\u8f38\u5165\u5167\u5bb9\u4e2d\u6709\u660e\u78ba\u6578\u503c\u7684\u9805\u76ee\uff08\u4f8b\u5982\u6307\u6578\u3001\u6f32\u8dcc\u5e45\u3001\u532f\u7387\u3001\u6b96\u5229\u7387\u3001\u671f\u8ca8\u3001\u91d1\u984d\u3001\u767e\u5206\u6bd4\uff09\uff0c\u512a\u5148\u6574\u7406\u6210 <table>\u3002",
+    "5. \u8868\u683c\u81f3\u5c11\u5305\u542b\u300c\u9805\u76ee\u300d\u8207\u300c\u6578\u503c / \u8b8a\u5316\u300d\u5169\u6b04\uff1b\u5982\u8cc7\u6599\u8db3\u5920\uff0c\u53ef\u52a0\u300c\u89e3\u8b80\u300d\u6b04\u3002",
+    "6. \u6f32\u8dcc\u6578\u5b57\u8acb\u76f4\u63a5\u5728\u6578\u5b57\u4e0a\u4f7f\u7528 inline style\uff1a\u4e0a\u6f32\u7528\u7d05\u8272 #b42318\uff0c\u4e0b\u8dcc\u7528\u7da0\u8272 #027a48\u3002",
+    "7. \u6240\u6709 HTML \u6a23\u5f0f\u90fd\u8981\u7528 inline style\uff0c\u4e0d\u8981\u7528 <style>\u3001class\u3001script\u3001iframe\u3002",
+    "8. \u6bb5\u843d\u8981\u7cbe\u7c21\u3001\u53ef\u6383\u8b80\uff0c\u6bcf\u6bb5\u4e0d\u8981\u904e\u9577\uff1b\u6a19\u984c\u4f7f\u7528 <h2> \u8207 <h3>\u3002",
+    "9. \u91cd\u9ede\u53ef\u7528 <strong>\uff0c\u689d\u5217\u53ef\u7528 <ul><li>\uff0c\u4f46\u4e0d\u8981\u904e\u5ea6\u88dd\u98fe\u3002",
+    "10. \u4e0d\u8981\u65b0\u589e\u8f38\u5165\u5167\u5bb9\u6c92\u6709\u7684\u6578\u5b57\u3001\u516c\u53f8\u3001\u7522\u696d\u3001\u65b0\u805e\u3001\u9023\u7d50\u6216\u7d50\u8ad6\u3002",
+    "11. \u6700\u5f8c\u4e00\u6bb5\u5fc5\u9808\u662f " + OPENAI_EMAIL_REPORT_CONFIG.REQUIRED_CLOSING_HTML,
     "",
-    "每日 ai_report：",
+    "\u6bcf\u65e5 ai_report\uff1a",
     aiReport,
     "",
-    "原始 report_markdown：",
-    reportMarkdown || "（未提供 report_markdown，請只使用 ai_report。）",
+    "\u539f\u59cb report_markdown\uff1a",
+    reportMarkdown || "\uff08\u672a\u63d0\u4f9b report_markdown\uff0c\u8acb\u53ea\u4f7f\u7528 ai_report\u3002\uff09",
   ].join("\n");
 }
 
@@ -111,6 +104,7 @@ function sanitizeEmailHtmlOutput_(html) {
     .replace(/```\s*$/i, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
     .replace(/\son\w+="[^"]*"/gi, "")
     .replace(/\son\w+='[^']*'/gi, "")
     .replace(/javascript:/gi, ""));
@@ -136,7 +130,7 @@ function trimBeforeFirstHeadingTag_(html) {
 }
 
 function trimAfterLastEmailHtmlTag_(html) {
-  const closingTagPattern = /<\/(h[1-6]|p|div|section|article|ul|ol|li|blockquote|strong|em|a)>/gi;
+  const closingTagPattern = /<\/(h[1-6]|p|div|section|article|ul|ol|li|blockquote|strong|em|a|table|tbody|thead|tr|td|th)>/gi;
   let match;
   let lastEndIndex = -1;
 
@@ -167,15 +161,13 @@ function isPromptEchoText_(text) {
   if (!normalizedText) return false;
 
   const promptEchoPhrases = [
-    "以下為",
-    "經整理",
-    "適合Gmail",
-    "可以直接使用",
-    "直接放進Gmail",
-    "每日AI市場報告",
-    "HTML信件內容",
-    "語氣自然清晰",
-    "專業與信任",
+    "\u8f38\u51fa\u898f\u683c",
+    "\u53ea\u8f38\u51faHTML",
+    "\u53ef\u4ee5\u76f4\u63a5\u653e\u9032Gmail",
+    "\u4e0d\u8981\u8f38\u51faMarkdown",
+    "\u6bcf\u65e5ai_report",
+    "\u539f\u59cbreport_markdown",
+    "HTML\u4fe1\u4ef6\u7247\u6bb5",
   ];
   const matches = promptEchoPhrases.filter(phrase => normalizedText.indexOf(phrase) !== -1).length;
 
@@ -193,8 +185,8 @@ function enforceRequiredEmailReportTitle_(html) {
 
 function enforceRequiredEmailReportClosing_(html) {
   const requiredClosing = OPENAI_EMAIL_REPORT_CONFIG.REQUIRED_CLOSING_HTML;
-  const closingText = "我是Dean開發的AI全球趨勢追縱系統";
-  const closingIndex = html.indexOf(closingText);
+  const closingText = "\u6211\u662fDean\u958b\u767c\u7684AI\u5168\u7403\u8da8\u52e2\u8ffd\u8e64\u7cfb\u7d71";
+  const closingIndex = String(html || "").indexOf(closingText);
 
   if (closingIndex >= 0) {
     const beforeClosing = html.slice(0, closingIndex);
@@ -207,7 +199,7 @@ function enforceRequiredEmailReportClosing_(html) {
     return html.slice(0, closingIndex).trim() + "\n\n" + requiredClosing;
   }
 
-  return html.trim() + "\n\n" + requiredClosing;
+  return String(html || "").trim() + "\n\n" + requiredClosing;
 }
 
 function cleanExistingOpenAiEmailHtml() {

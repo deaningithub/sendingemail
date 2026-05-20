@@ -196,7 +196,7 @@ function buildRenewalBlock_(subscriptionFormUrl, daysLeft, expireText, serviceNa
 function formatReportBody_(value) {
   const rawHtml = String(value || "").trim();
 
-  return sanitizeFinanceReportHtml_(rawHtml);
+  return enhanceFinanceReportHtml_(sanitizeFinanceReportHtml_(rawHtml));
 }
 
 function sanitizeFinanceReportHtml_(html) {
@@ -207,6 +207,125 @@ function sanitizeFinanceReportHtml_(html) {
     .replace(/\son\w+="[^"]*"/gi, "")
     .replace(/\son\w+='[^']*'/gi, "")
     .replace(/javascript:/gi, "");
+}
+
+function enhanceFinanceReportHtml_(html) {
+  const cleanedHtml = String(html || "").trim();
+  if (!cleanedHtml) return "";
+
+  const metricTable = buildMetricSummaryTable_(cleanedHtml);
+  const styledHtml = highlightMarketMovesInHtml_(styleFinanceReportElements_(cleanedHtml));
+
+  return [
+    metricTable,
+    `<div style="margin:22px 0 0;padding:0;">${styledHtml}</div>`,
+  ].filter(Boolean).join("\n");
+}
+
+function styleFinanceReportElements_(html) {
+  return String(html || "")
+    .replace(/<h2(?![^>]*\bstyle=)([^>]*)>/gi, '<h2$1 style="font-size:22px;line-height:1.45;margin:26px 0 12px;color:#17212b;border-bottom:1px solid #dfe5ea;padding-bottom:8px;">')
+    .replace(/<h3(?![^>]*\bstyle=)([^>]*)>/gi, '<h3$1 style="font-size:18px;line-height:1.5;margin:22px 0 10px;color:#243140;">')
+    .replace(/<p(?![^>]*\bstyle=)([^>]*)>/gi, '<p$1 style="margin:0 0 14px;font-size:16px;line-height:1.9;color:#2d3845;">')
+    .replace(/<ul(?![^>]*\bstyle=)([^>]*)>/gi, '<ul$1 style="margin:0 0 16px 20px;padding:0;color:#2d3845;">')
+    .replace(/<ol(?![^>]*\bstyle=)([^>]*)>/gi, '<ol$1 style="margin:0 0 16px 20px;padding:0;color:#2d3845;">')
+    .replace(/<li(?![^>]*\bstyle=)([^>]*)>/gi, '<li$1 style="margin:0 0 8px;font-size:16px;line-height:1.75;">')
+    .replace(/<blockquote(?![^>]*\bstyle=)([^>]*)>/gi, '<blockquote$1 style="margin:18px 0;padding:14px 16px;background:#f6f8fa;border-left:4px solid #64748b;color:#334155;">')
+    .replace(/<table(?![^>]*\bstyle=)([^>]*)>/gi, '<table$1 style="width:100%;border-collapse:collapse;margin:18px 0 22px;font-size:14px;line-height:1.5;border:1px solid #d8e0e8;">')
+    .replace(/<th(?![^>]*\bstyle=)([^>]*)>/gi, '<th$1 style="padding:10px 12px;background:#eef3f7;border:1px solid #d8e0e8;color:#1f2a37;text-align:left;font-weight:700;">')
+    .replace(/<td(?![^>]*\bstyle=)([^>]*)>/gi, '<td$1 style="padding:10px 12px;border:1px solid #d8e0e8;color:#2d3845;vertical-align:top;">');
+}
+
+function buildMetricSummaryTable_(html) {
+  if (/<table\b/i.test(html)) return "";
+
+  const rows = extractMetricRowsFromReportHtml_(html);
+  if (rows.length < 3) return "";
+
+  const bodyRows = rows.slice(0, 12).map(row => `
+    <tr>
+      <td style="padding:10px 12px;border:1px solid #d8e0e8;color:#334155;font-weight:700;background:#fbfcfd;">${escapeHtml_(row.label)}</td>
+      <td style="padding:10px 12px;border:1px solid #d8e0e8;color:#1f2937;">${highlightMarketMovesInText_(escapeHtml_(row.value))}</td>
+    </tr>`).join("");
+
+  return `
+<div style="margin:0 0 24px;">
+  <div style="font-size:13px;color:#64748b;margin:0 0 8px;font-weight:700;">\u95dc\u9375\u6578\u64da\u8868</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.5;border:1px solid #d8e0e8;">
+    <tr>
+      <th style="padding:10px 12px;background:#202833;border:1px solid #202833;color:#ffffff;text-align:left;">\u9805\u76ee</th>
+      <th style="padding:10px 12px;background:#202833;border:1px solid #202833;color:#ffffff;text-align:left;">\u6578\u503c / \u8b8a\u5316</th>
+    </tr>
+    ${bodyRows}
+  </table>
+</div>`;
+}
+
+function extractMetricRowsFromReportHtml_(html) {
+  const plainText = String(html || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/[ \t]+/g, " ")
+    .replace(/[ \t]*[\r\n]+[ \t]*/g, "\n");
+
+  const seen = {};
+  const rows = [];
+
+  plainText.split(/\n|。|；|;/).forEach(line => {
+    const text = String(line || "").replace(/\s+/g, " ").trim();
+    if (!isMetricSummaryLine_(text)) return;
+
+    const row = splitMetricSummaryLine_(text);
+    if (!row || seen[row.label]) return;
+
+    seen[row.label] = true;
+    rows.push(row);
+  });
+
+  return rows;
+}
+
+function isMetricSummaryLine_(text) {
+  if (!text || text.length > 110) return false;
+  if (!/[0-9]/.test(text)) return false;
+  return /[%％]|[+\-＋－−▲▼]|點|美元|元|億|兆|bp|bps|殖利率|指數|匯率|期貨|漲|跌/i.test(text);
+}
+
+function splitMetricSummaryLine_(text) {
+  const separatorMatch = text.match(/^(.{2,32}?)[：:]\s*(.{1,80})$/);
+  if (separatorMatch) {
+    return {
+      label: separatorMatch[1].replace(/^[-•\s]+/, "").trim(),
+      value: separatorMatch[2].trim(),
+    };
+  }
+
+  const valueMatch = text.match(/([+\-＋－−▲▼]?\s*\d[\d,]*(?:\.\d+)?\s*(?:%|％|點|美元|元|億|兆|bp|bps)?(?:\s*[\/,，]\s*[+\-＋－−▲▼]?\s*\d[\d,]*(?:\.\d+)?\s*(?:%|％|點|美元|元|億|兆|bp|bps)?)*)/i);
+  if (!valueMatch || valueMatch.index === undefined || valueMatch.index < 2) return null;
+
+  return {
+    label: text.slice(0, valueMatch.index).replace(/^[-•\s]+/, "").trim(),
+    value: text.slice(valueMatch.index).trim(),
+  };
+}
+
+function highlightMarketMovesInHtml_(html) {
+  return String(html || "").split(/(<[^>]+>)/g).map(part => {
+    if (!part || part.charAt(0) === "<") return part;
+    return highlightMarketMovesInText_(part);
+  }).join("");
+}
+
+function highlightMarketMovesInText_(text) {
+  return String(text || "").replace(/([+\uFF0B▲]\s*\d[\d,]*(?:\.\d+)?\s*(?:%|％|點|bp|bps)?|[-\u2212\uFF0D▼]\s*\d[\d,]*(?:\.\d+)?\s*(?:%|％|點|bp|bps)?)/g, function(match) {
+    const isUp = /^[+\uFF0B▲]/.test(match);
+    const color = isUp ? "#b42318" : "#027a48";
+    const background = isUp ? "#fff1f0" : "#ecfdf3";
+    return `<span style="display:inline-block;padding:1px 6px;margin:0 2px;border-radius:4px;font-weight:700;color:${color};background:${background};">${match}</span>`;
+  });
 }
 
 function markTodayReportSent_(ss, today, vars) {
@@ -236,6 +355,7 @@ function markTodayReportSent_(ss, today, vars) {
         sheet.getRange(rowNumber, idx["信件標題"] + 1).setValue(buildAutoReportSubject_(today, vars));
       }
       sheet.getRange(rowNumber, idx["狀態"] + 1).setValue("已寄送");
+      markReportSentAt_(sheet, rowNumber, idx, new Date());
     }
   });
 }

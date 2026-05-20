@@ -12,12 +12,14 @@ function setupFinanceMailSystem() {
 
   const reportSheet = getOrCreateSheet_(ss, CONFIG.REPORT_SHEET);
   if (reportSheet.getLastRow() === 0) {
-    reportSheet.appendRow(["\u5bc4\u9001\u65e5\u671f", "\u4fe1\u4ef6\u6a19\u984c", "\u4eca\u65e5\u5831\u544a", "\u72c0\u614b", "\u751f\u6210\u6642\u9593", "\u8f49\u5165\u6642\u9593"]);
+    reportSheet.appendRow(["\u5bc4\u9001\u65e5\u671f", "\u4fe1\u4ef6\u6a19\u984c", "\u4eca\u65e5\u5831\u544a", "\u72c0\u614b", "\u5bc4\u9001\u6642\u9593", "\u751f\u6210\u6642\u9593", "\u8f49\u5165\u6642\u9593", "run_id"]);
     reportSheet.appendRow([
       Utilities.formatDate(new Date(), CONFIG.TZ, "yyyy/MM/dd"),
       "",
       "",
       "\u5f85\u5bc4\u9001",
+      "",
+      "",
       "",
       "",
     ]);
